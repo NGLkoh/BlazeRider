@@ -8,25 +8,23 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import java.util.Locale
 
+// The adapter now works with the simple, display-ready data class.
 class NotificationsAdapter(
-    private var notifications: List<Notification>,
-    private val onItemClick: (Notification) -> Unit
+    private var notifications: List<DisplayNotification>,
+    private val onItemClick: (DisplayNotification, Int) -> Unit
 ) : RecyclerView.Adapter<NotificationsAdapter.ViewHolder>() {
 
-    class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+    inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         private val titleTextView: TextView = view.findViewById(R.id.notification_title)
         private val bodyTextView: TextView = view.findViewById(R.id.notification_body)
         private val unreadDot: View = view.findViewById(R.id.unread_dot)
 
-        fun bind(notification: Notification, clickListener: (Notification) -> Unit) {
-            // Capitalize the first letter of the notification type for the title
-            titleTextView.text = notification.type.replaceFirstChar { 
-                if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() 
-            }
-            bodyTextView.text = notification.message
+        // The bind method is now much simpler. It just displays the data it's given.
+        fun bind(displayNotification: DisplayNotification, position: Int, clickListener: (DisplayNotification, Int) -> Unit) {
+            titleTextView.text = displayNotification.title
+            bodyTextView.text = displayNotification.message
 
-            // Set the background and unread dot based on the isRead status
-            if (notification.isRead) {
+            if (displayNotification.isRead) {
                 unreadDot.visibility = View.GONE
                 itemView.setBackgroundColor(Color.WHITE)
             } else {
@@ -34,8 +32,7 @@ class NotificationsAdapter(
                 itemView.setBackgroundColor(Color.parseColor("#FFF1F1")) // Light red for unread
             }
             
-            // Set the click listener for the item
-            itemView.setOnClickListener { clickListener(notification) }
+            itemView.setOnClickListener { clickListener(displayNotification, position) }
         }
     }
 
@@ -46,12 +43,12 @@ class NotificationsAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(notifications[position], onItemClick)
+        holder.bind(notifications[position], position, onItemClick)
     }
 
     override fun getItemCount() = notifications.size
 
-    fun updateNotifications(newNotifications: List<Notification>) {
+    fun updateNotifications(newNotifications: List<DisplayNotification>) {
         notifications = newNotifications
         notifyDataSetChanged()
     }
