@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:background="@drawable/rounded_white_background"
+    android:padding="8dp"
+    android:elevation="8dp">
+
+    <ImageView
+        android:id="@+id/reaction_like"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:src="@drawable/ic_fb_like"
+        android:contentDescription="Like Reaction"
+        android:padding="4dp"
+        android:scaleType="fitCenter" />
+
+    <ImageView
+        android:id="@+id/reaction_love"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:src="@drawable/ic_fb_love"
+        android:contentDescription="Love Reaction"
+        android:padding="4dp"
+        android:scaleType="fitCenter" />
+
+    <ImageView
+        android:id="@+id/reaction_laugh"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:src="@drawable/ic_fb_laugh"
+        android:contentDescription="Laugh Reaction"
+        android:padding="4dp"
+        android:scaleType="fitCenter" />
+
+    <ImageView
+        android:id="@+id/reaction_wow"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:src="@drawable/ic_fb_wow"
+        android:contentDescription="Wow Reaction"
+        android:padding="4dp"
+        android:scaleType="fitCenter" />
+
+    <ImageView
+        android:id="@+id/reaction_sad"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:src="@drawable/ic_fb_sad"
+        android:contentDescription="Sad Reaction"
+        android:padding="4dp"
+        android:scaleType="fitCenter" />
+
+    <ImageView
+        android:id="@+id/reaction_angry"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:src="@drawable/ic_fb_angry"
+        android:contentDescription="Angry Reaction"
+        android:padding="4dp"
+        android:scaleType="fitCenter" />
+</LinearLayout>

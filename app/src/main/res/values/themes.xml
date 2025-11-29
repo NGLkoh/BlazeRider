@@ -1,0 +1,16 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Application light theme using Material 3 -->
+    <style name="Theme.AORVBlazeRider" parent="Theme.Material3.Light.NoActionBar">
+        <!-- Optional: Customize colors -->
+        <item name="colorPrimary">@color/red_orange</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorSecondary">@color/teal_200</item>
+        <item name="colorOnSecondary">@color/black</item>
+        <item name="colorAccent">@color/quit</item>
+
+        <!-- Disable dark mode fallback -->
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
+    </style>
+
+</resources>

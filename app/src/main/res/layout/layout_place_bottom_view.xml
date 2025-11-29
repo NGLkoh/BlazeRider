@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@android:color/white"
+    android:padding="16dp">
+
+    <!-- Close Button -->
+    <ImageView
+        android:id="@+id/close_button"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:src="@drawable/ic_close"
+        android:contentDescription="Close"
+        app:tint="@android:color/black"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Place Name -->
+    <TextView
+        android:id="@+id/place_name"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:fontFamily="@font/poppins_regular"
+        android:text="Tanza Hospital"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/close_button"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Place Address -->
+    <TextView
+        android:id="@+id/place_address"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:textSize="14sp"
+        android:fontFamily="@font/poppins_regular"
+        android:text="Tanza, Cavite"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/close_button"
+        app:layout_constraintTop_toBottomOf="@id/place_name" />
+
+    <!-- Start Route Button -->
+    <Button
+        android:id="@+id/start_route_button"
+        android:layout_width="0dp"
+        android:layout_height="48dp"
+        android:text="Start route"
+        android:textSize="16sp"
+        android:fontFamily="@font/poppins_regular"
+        android:backgroundTint="@color/red_orange"
+        android:textColor="@android:color/white"
+        android:layout_marginTop="16dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/place_address" />
+
+    <!-- Share Ride Button -->
+    <Button
+        android:id="@+id/share_ride_button"
+        android:layout_width="0dp"
+        android:layout_height="48dp"
+        android:backgroundTint="@color/white"
+        android:fontFamily="@font/poppins_regular"
+        android:text="Share ride"
+        android:textColor="@color/red_orange"
+        android:textSize="16sp"
+        android:visibility="invisible"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/start_route_button" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

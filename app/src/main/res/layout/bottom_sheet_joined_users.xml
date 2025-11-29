@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@android:color/transparent">
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/bottom_sheet_content"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="4dp"
+        app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
+        app:layout_behavior="@string/bottom_sheet_behavior">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Drag Handle -->
+            <View
+                android:id="@+id/drag_handle"
+                android:layout_width="36dp"
+                android:layout_height="4dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/drag_handle_shape"
+                android:backgroundTint="?attr/colorOnSurfaceVariant"/>
+
+            <!-- Title -->
+            <TextView
+                android:id="@+id/bottom_sheet_title"
+                style="@style/TextAppearance.Material3.TitleLarge"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Joined Users"
+                android:textAlignment="center"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:textColor="?attr/colorOnSurface"/>
+
+            <!-- User List -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/joined_users_list"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                tools:listitem="@layout/item_joined_user"/>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

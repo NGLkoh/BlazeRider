@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/gradient_orange"
+        android:paddingTop="24dp"
+        android:paddingBottom="16dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp">
+
+        <TextView
+            android:id="@+id/tvTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Users"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"/>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_alignParentEnd="true"
+            android:background="@drawable/toggle_background"
+            android:padding="2dp">
+
+            <!-- Pending Button with Badge -->
+            <FrameLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="4dp">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnPending"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Pending"
+                    android:background="@drawable/toggle_button_selector"
+                    android:textColor="@android:color/white"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp" />
+
+                <TextView
+                    android:id="@+id/pendingBadge"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="top|end"
+                    android:layout_marginTop="-0dp"
+                    android:layout_marginEnd="-0dp"
+                    android:background="@drawable/badge_background"
+                    android:gravity="center"
+                    android:textColor="@android:color/white"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+            </FrameLayout>
+
+            <!-- Accepted Button with Badge -->
+            <FrameLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnAccepted"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Accepted"
+                    android:background="@drawable/toggle_button_selector"
+                    android:textColor="@android:color/white"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp" />
+
+                <TextView
+                    android:id="@+id/acceptedBadge"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="top|end"
+                    android:layout_marginTop="0dp"
+                    android:layout_marginEnd="0dp"
+                    android:background="@drawable/badge_background"
+                    android:gravity="center"
+                    android:textColor="@android:color/white"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+            </FrameLayout>
+        </LinearLayout>
+
+    </RelativeLayout>
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@android:color/white"
+        android:padding="16dp">
+
+        <EditText
+            android:id="@+id/searchBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Search by name..."
+            android:background="@drawable/search_bar_background"
+            android:padding="12dp"
+            android:layout_marginBottom="16dp"/>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerViewUserRequests"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_below="@id/searchBar"/>
+
+        <TextView
+            android:id="@+id/noRequestsText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="No users on the list"
+            android:textSize="18sp"
+            android:textColor="@android:color/black"
+            android:visibility="gone"
+            android:layout_centerInParent="true"
+            android:layout_below="@id/searchBar"/>
+    </RelativeLayout>
+</LinearLayout>

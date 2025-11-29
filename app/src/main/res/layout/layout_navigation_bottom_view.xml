@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@android:color/white"
+    android:padding="16dp">
+
+    <!-- Close Button -->
+    <ImageView
+        android:id="@+id/nav_close_button"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:src="@drawable/ic_close"
+        android:contentDescription="Close"
+        app:tint="@android:color/black"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Transport Mode -->
+    <TextView
+        android:id="@+id/transport_mode"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Two-wheeler"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:fontFamily="@font/poppins_regular"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Trip Duration -->
+    <TextView
+        android:id="@+id/trip_duration"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="2 hr 26 min"
+        android:textSize="16sp"
+        android:textColor="@color/red_orange"
+        android:fontFamily="@font/poppins_regular"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/transport_mode"
+        android:layout_marginTop="8dp" />
+
+    <!-- Trip Distance -->
+    <TextView
+        android:id="@+id/trip_distance"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="(63km)"
+        android:textSize="16sp"
+        android:textColor="@color/black"
+        android:fontFamily="@font/poppins_regular"
+        app:layout_constraintStart_toEndOf="@id/trip_duration"
+        app:layout_constraintTop_toBottomOf="@id/transport_mode"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="8dp" />
+
+    <!-- Start Button -->
+    <Button
+        android:id="@+id/nav_start_button"
+        android:layout_width="0dp"
+        android:layout_height="48dp"
+        android:text="Start"
+        android:textSize="16sp"
+        android:fontFamily="@font/poppins_regular"
+        android:backgroundTint="@color/red_orange"
+        android:textColor="@android:color/white"
+        android:layout_marginTop="16dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/nav_share_ride_button"
+        app:layout_constraintTop_toBottomOf="@id/trip_duration"
+        android:layout_marginEnd="8dp" />
+
+    <!-- Share Ride Button -->
+    <Button
+        android:id="@+id/nav_share_ride_button"
+        android:layout_width="0dp"
+        android:layout_height="48dp"
+        android:text="Share ride"
+        android:textSize="16sp"
+        android:fontFamily="@font/poppins_regular"
+        android:backgroundTint="@color/red_orange"
+        android:textColor="@color/white"
+        app:layout_constraintStart_toEndOf="@id/nav_start_button"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/trip_distance"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="16dp" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

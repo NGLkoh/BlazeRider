@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/current_ride_card"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="16dp"
+    app:cardCornerRadius="8dp"
+    app:cardElevation="4dp">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp">
+
+        <!-- User Status with Ride Numbers and LIVE indicator -->
+        <LinearLayout
+            android:id="@+id/user_status_container"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <TextView
+                android:id="@+id/ride_numbers"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="3 Riders"
+                android:textAppearance="@style/TextAppearance.Material3.BodyMedium" />
+
+            <View
+                android:id="@+id/live_indicator"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:visibility="gone"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/red_pulse_dot"
+                android:contentDescription="Live ride indicator" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="LIVE"
+                android:visibility="gone"
+                android:textColor="@android:color/holo_red_dark"
+                android:textAppearance="@style/TextAppearance.Material3.BodyMedium" />
+        </LinearLayout>
+
+        <!-- Profile Picture -->
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/profile_picture"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:contentDescription="User Image"
+            android:scaleType="centerCrop"
+            android:src="@drawable/ic_anonymous"
+            app:shapeAppearanceOverlay="@style/RoundedImage"
+            app:layout_constraintTop_toBottomOf="@id/user_status_container"
+            app:layout_constraintStart_toStartOf="parent" />
+
+        <TextView
+            android:id="@+id/rider_name"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="Name"
+            android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+            app:layout_constraintTop_toBottomOf="@id/user_status_container"
+            app:layout_constraintStart_toEndOf="@id/profile_picture"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <TextView
+            android:id="@+id/date_created"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Date Created"
+            android:textColor="@color/gray"
+            android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+            app:layout_constraintTop_toBottomOf="@id/rider_name"
+            app:layout_constraintStart_toStartOf="@id/rider_name"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- Origin -->
+        <LinearLayout
+            android:id="@+id/origin_container"
+            android:layout_width="match_parent"
+            android:layout_height="24dp"
+            android:layout_marginTop="12dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            app:layout_constraintTop_toBottomOf="@id/date_created">
+
+            <ImageView
+                android:id="@+id/origin_icon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:contentDescription="Origin icon"
+                android:src="@drawable/ic_start_pin_point"
+                app:tint="@color/dark_gray" />
+
+            <TextView
+                android:id="@+id/origin"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="Origin:"
+                android:textAppearance="@style/TextAppearance.Material3.BodyMedium" />
+        </LinearLayout>
+
+        <!-- Destination -->
+        <LinearLayout
+            android:id="@+id/destination_container"
+            android:layout_width="match_parent"
+            android:layout_height="24dp"
+            android:layout_marginTop="2dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            app:layout_constraintTop_toBottomOf="@id/origin_container">
+
+            <ImageView
+                android:id="@+id/destination_icon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_end_pin_point"
+                android:contentDescription="Destination icon"
+                app:tint="@color/dark_gray" />
+
+            <TextView
+                android:id="@+id/destination"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="Destination:"
+                android:textAppearance="@style/TextAppearance.Material3.BodyMedium" />
+        </LinearLayout>
+
+        <!-- Distance -->
+        <LinearLayout
+            android:id="@+id/distance_container"
+            android:layout_width="match_parent"
+            android:layout_height="24dp"
+            android:layout_marginTop="2dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            app:layout_constraintTop_toBottomOf="@id/destination_container">
+
+            <ImageView
+                android:id="@+id/distance_icon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_ruler_horizontal"
+                android:contentDescription="Distance icon"
+                app:tint="@color/dark_gray" />
+
+            <TextView
+                android:id="@+id/distance"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="Distance:"
+                android:textAppearance="@style/TextAppearance.Material3.BodyMedium" />
+        </LinearLayout>
+
+        <!-- Duration -->
+        <LinearLayout
+            android:id="@+id/duration_container"
+            android:layout_width="match_parent"
+            android:layout_height="24dp"
+            android:layout_marginTop="2dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            app:layout_constraintTop_toBottomOf="@id/distance_container">
+
+            <ImageView
+                android:id="@+id/duration_icon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_time"
+                android:contentDescription="Duration icon"
+                app:tint="@color/dark_gray" />
+
+            <TextView
+                android:id="@+id/duration"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="Duration:"
+                android:textAppearance="@style/TextAppearance.Material3.BodyMedium" />
+        </LinearLayout>
+
+        <!-- Buttons Container -->
+        <LinearLayout
+            android:id="@+id/buttons_container"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal"
+            app:layout_constraintTop_toBottomOf="@id/duration_container"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/preview_ride_btn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:backgroundTint="@color/green"
+                android:contentDescription="Preview Ride"
+                android:text="Preview"
+                android:textSize="12sp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                app:icon="@drawable/ic_map_location_pin"
+                app:iconSize="16dp"
+                app:iconPadding="4dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/join_ride_btn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:backgroundTint="@color/quit"
+                android:contentDescription="Join Ride"
+                android:text="Join Ride"
+                android:textSize="12sp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                app:icon="@drawable/ic_join_ride"
+                app:iconSize="16dp"
+                app:iconPadding="4dp" />
+        </LinearLayout>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</androidx.cardview.widget.CardView>

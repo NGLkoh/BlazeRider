@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/messages_fragment"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center_horizontal"
+    android:padding="24dp"
+    android:background="@android:color/white">
+
+    <!-- Title -->
+    <TextView
+        android:id="@+id/messages_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Messages"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_gravity="start"
+        android:fontFamily="@font/poppins_bold"
+        android:paddingBottom="24dp" />
+
+    <!-- Empty message -->
+    <TextView
+        android:id="@+id/no_messages_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="No messages"
+        android:textSize="16sp"
+        android:textColor="#666666"
+        android:gravity="center"
+        android:layout_gravity="center_horizontal"
+        android:fontFamily="@font/poppins_regular" />
+
+</LinearLayout>

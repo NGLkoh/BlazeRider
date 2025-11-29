@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:background="@android:color/white">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Dashboard Title -->
+        <TextView
+            android:text="Welcome Admin"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingBottom="24dp" />
+
+        <!-- Dashboard Title -->
+        <TextView
+            android:text="Dashboard"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:layout_width="wrap_content"            android:layout_height="wrap_content"
+            android:paddingBottom="8dp" />
+
+        <!-- Total Users Card -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="16dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tv_total_users"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textSize="24sp"
+                    android:textStyle="bold"
+                    android:textColor="@android:color/black" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Registered &amp; Verified Users"
+                    android:textSize="14sp"
+                    android:textColor="@android:color/darker_gray" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- Row for Label + Segmented Control -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:text="Users"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="@android:color/black" />
+
+            <!-- Segmented Control -->
+            <RadioGroup
+                android:id="@+id/segmentedControl"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <RadioButton
+                    android:id="@+id/btn_day"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Day"
+                    android:textSize="14sp"
+                    android:padding="8dp"
+                    android:background="@android:color/transparent"
+                    android:button="@null"
+                    android:textColor="@android:color/black" />
+
+                <RadioButton
+                    android:id="@+id/btn_week"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Week"
+                    android:textSize="14sp"
+                    android:padding="8dp"
+                    android:background="@android:color/black"
+                    android:textColor="@android:color/white"
+                    android:button="@null" />
+
+                <RadioButton
+                    android:id="@+id/btn_month"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Month"
+                    android:textSize="14sp"
+                    android:padding="8dp"
+                    android:background="@android:color/transparent"
+                    android:button="@null"
+                    android:textColor="@android:color/black" />
+
+                <RadioButton
+                    android:id="@+id/btn_year"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Year"
+                    android:textSize="14sp"
+                    android:padding="8dp"
+                    android:background="@android:color/transparent"
+                    android:button="@null"
+                    android:textColor="@android:color/black" />
+            </RadioGroup>
+        </LinearLayout>
+
+        <!-- Line Chart with extra margins -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="8dp"
+            android:paddingBottom="32dp">
+
+            <com.github.mikephil.charting.charts.LineChart
+                android:id="@+id/lineChart"
+                android:layout_width="match_parent"
+                android:layout_height="400dp"
+                android:background="@android:color/white" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

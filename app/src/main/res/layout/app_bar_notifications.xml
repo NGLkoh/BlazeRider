@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.appcompat.widget.Toolbar
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/toolbar"
+    android:layout_width="match_parent"
+    android:layout_height="?attr/actionBarSize"
+    android:background="?attr/colorPrimary"
+    android:visibility="visible">
+
+    <LinearLayout
+        android:id="@+id/toolbar_content"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp">
+
+        <!-- Default Title (Shown in Normal Mode) -->
+        <TextView
+            android:id="@+id/toolbar_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Notifications"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:fontFamily="@font/poppins_bold"
+            android:visibility="visible" />
+
+        <!-- Selection Mode Layout (Initially Hidden) -->
+        <LinearLayout
+            android:id="@+id/selection_mode_layout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/toolbar_back"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@drawable/ic_back"
+                app:tint="@android:color/white"
+                android:contentDescription="Back"
+                android:padding="8dp" />
+
+            <TextView
+                android:id="@+id/selection_count"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="0"
+                android:textSize="18sp"
+                android:textColor="@android:color/white"
+                android:fontFamily="@font/poppins_regular"
+                android:paddingStart="8dp" />
+
+            <ImageView
+                android:id="@+id/toolbar_mark_as_read"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@drawable/ic_mark_as_read"
+                app:tint="@android:color/white"
+                android:contentDescription="Mark as read"
+                android:padding="8dp" />
+
+            <ImageView
+                android:id="@+id/toolbar_trash"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@drawable/ic_trash"
+                app:tint="@android:color/white"
+                android:contentDescription="Delete"
+                android:padding="8dp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</androidx.appcompat.widget.Toolbar>

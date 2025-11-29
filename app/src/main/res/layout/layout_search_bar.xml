@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginHorizontal="16dp"
+    android:layout_marginTop="16dp"
+    android:layout_marginBottom="8dp"
+    app:cardBackgroundColor="@android:color/white"
+    app:cardCornerRadius="40dp"
+    app:cardElevation="4dp">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="16dp">
+
+        <!-- Left Blaze Rider Icon -->
+        <ImageView
+            android:id="@+id/profile_picture"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_blaze_rider"
+            android:contentDescription="Blaze Rider logo"
+            android:scaleType="centerCrop"
+            app:tint="@color/red_orange"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent" />
+
+        <!-- User Avatar on Right -->
+        <ImageView
+            android:id="@+id/user_icon"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_user"
+            android:visibility="gone"
+            android:contentDescription="User Profile"
+            android:scaleType="centerCrop"
+            android:background="@drawable/circle_background"
+            android:padding="4dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent" />
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/search_bar_button"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="8dp"
+            android:layout_marginVertical="4dp"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="0dp"
+            app:cardBackgroundColor="@android:color/transparent"
+            app:rippleColor="@color/white"
+            android:backgroundTint="@color/white"
+            app:layout_constraintStart_toEndOf="@id/profile_picture"
+            app:layout_constraintEnd_toStartOf="@id/user_icon"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            android:clickable="true"
+            android:focusable="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="4dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/search_placeholder"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:fontFamily="@font/poppins_regular"
+                    android:gravity="center_vertical"
+                    android:text="Search here"
+                    android:textColor="#888"
+                    android:textSize="20sp"
+                    android:singleLine="true"
+                    android:ellipsize="end" />
+
+                <ImageView
+                    android:id="@+id/mic_button"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:contentDescription="Voice search"
+                    android:src="@drawable/ic_mic"
+                    android:visibility="visible"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:padding="4dp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</androidx.cardview.widget.CardView>

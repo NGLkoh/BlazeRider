@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="comments_container" type="id" />
+    <item name="post_divider" type="id" />
+    <item name="post_actions" type="id" />
+    <item name="post_profile_pic" type="id" />
+    <item name="post_user_name" type="id" />
+    <item name="post_timestamp" type="id" />
+    <item name="post_image_container" type="id" />
+    <item name="post_image_view_pager" type="id" />
+    <item name="post_image_counter" type="id" />
+    <item name="post_like_button" type="id" />
+    <item name="post_comment_button" type="id" />
+    <item name="comments_title" type="id" />
+    <item name="comments_close_button" type="id" />
+    <item name="comments_recycler_view" type="id" />
+    <item name="comment_input_container" type="id" />
+    <item name="no_comments_text" type="id" />
+    <item name="comment_remove_image_button" type="id" />
+    <item name="comment_input" type="id" />
+    <item name="comment_add_image_button" type="id" />
+    <item name="comment_submit_button" type="id" />
+    <item name="comments_fragment_container" type="id" />
+    <item name="comment_list" type="id" />
+</resources>

@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/white"
+    android:fitsSystemWindows="true">
+
+    <!-- AppBar with Toolbar -->
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/appbar_layout"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@color/white"
+        android:theme="@style/ThemeOverlay.MaterialComponents.Light"
+        android:fitsSystemWindows="true"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <androidx.appcompat.widget.Toolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/white"
+            app:navigationIcon="@drawable/ic_chevron_left"
+            app:title="Post"
+            app:titleTextColor="@android:color/black"
+            app:popupTheme="@style/ThemeOverlay.MaterialComponents.Light">
+
+            <!-- Post Button as TextView inside Toolbar -->
+            <TextView
+                android:id="@+id/post_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:padding="8dp"
+                android:layout_marginEnd="18dp"
+                android:text="Post"
+                android:textColor="@color/red_orange"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true" />
+        </androidx.appcompat.widget.Toolbar>
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <!-- Main Content -->
+    <LinearLayout
+        android:id="@+id/main_content"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:orientation="vertical"
+        android:padding="16dp"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior"
+        app:layout_constraintTop_toBottomOf="@id/appbar_layout"
+        app:layout_constraintBottom_toTopOf="@id/post_composer_toolbar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- Profile Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:padding="4dp">
+
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/profile_pic"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="8dp"
+                android:contentDescription="User Image"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_anonymous"
+                app:shapeAppearanceOverlay="@style/RoundedImage" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/profile_name"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="16sp"
+                    android:textColor="@android:color/black"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:layout_marginBottom="4dp" />
+
+                <Spinner
+                    android:id="@+id/privacy_spinner"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:entries="@array/privacy_options"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Post Content -->
+        <EditText
+            android:id="@+id/post_content"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="0.5"
+            android:layout_marginTop="8dp"
+            android:hint="What's on your mind?"
+            android:gravity="top"
+            android:inputType="textMultiLine"
+            android:background="@android:color/transparent"
+            android:textSize="16sp" />
+
+        <!-- Selected Images Preview with ViewPager2 -->
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/image_preview_container"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="0.5"
+            android:layout_marginTop="8dp">
+
+            <androidx.viewpager2.widget.ViewPager2
+                android:id="@+id/image_view_pager"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent" />
+
+            <TextView
+                android:id="@+id/image_counter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@android:color/black"
+                android:textColor="@android:color/white"
+                android:padding="4dp"
+                android:textSize="12sp"
+                android:visibility="gone"
+                app:layout_constraintTop_toTopOf="@id/image_view_pager"
+                app:layout_constraintEnd_toEndOf="@id/image_view_pager"
+                android:layout_margin="8dp" />
+
+            <ImageButton
+                android:id="@+id/remove_image_button"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:background="@android:color/transparent"
+                android:src="@drawable/ic_close"
+                android:contentDescription="Remove image"
+                android:visibility="gone"
+                app:tint="@android:color/white"
+                app:layout_constraintTop_toTopOf="@id/image_view_pager"
+                app:layout_constraintEnd_toStartOf="@id/image_counter"
+                android:layout_marginEnd="8dp"
+                android:layout_marginTop="8dp" />
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </LinearLayout>
+
+    <!-- Post Composer Toolbar (Bottom Navigation) -->
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/post_composer_toolbar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="@android:color/white"
+        app:menu="@menu/post_composer_menu"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+</androidx.constraintlayout.widget.ConstraintLayout>

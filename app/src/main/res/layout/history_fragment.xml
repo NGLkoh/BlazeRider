@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="0dp">
+
+    <!-- Top App Bar with Hamburger + Title -->
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/historyToolbar"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="?attr/colorPrimary"
+        android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar">
+
+        <!-- Icon + Title -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/btnMenu"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/ic_hamburger"
+                android:tint="@android:color/white"
+                android:padding="8dp" />
+
+            <TextView
+                android:id="@+id/txtHistoryTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="History"
+                android:textColor="@android:color/white"
+                android:textSize="20sp"
+                android:paddingStart="10dp" />
+        </LinearLayout>
+
+    </androidx.appcompat.widget.Toolbar>
+
+
+    <!-- Buttons (Clear All / Delete Selected) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:padding="10dp">
+
+        <Button
+            android:id="@+id/btnDeleteSelected"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Delete Selected" />
+
+        <Button
+            android:id="@+id/btnClearAll"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:text="Clear All" />
+    </LinearLayout>
+
+
+    <!-- RecyclerView -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/historyRecyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:padding="10dp"/>
+
+    <!-- Map -->
+    <fragment
+        android:id="@+id/historyMap"
+        android:name="com.google.android.gms.maps.SupportMapFragment"
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        android:layout_margin="10dp" />
+
+</LinearLayout>

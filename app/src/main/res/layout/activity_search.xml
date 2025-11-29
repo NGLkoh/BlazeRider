@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/white"
+    android:clipToPadding="false"
+    android:clipChildren="false">
+
+    <!-- Search Bar Card -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/search_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="48dp"
+        android:layout_marginBottom="8dp"
+        app:cardBackgroundColor="@android:color/white"
+        app:cardCornerRadius="40dp"
+        app:cardElevation="4dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="12dp"
+           >
+
+            <!-- Back Arrow Button -->
+            <ImageView
+                android:id="@+id/back_button"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:contentDescription="Back"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_arrow_back"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:tint="@color/dark_gray" />
+
+            <!-- Search Bar -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/search_bar_input"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="12dp"
+                android:layout_marginVertical="4dp"
+                android:clickable="true"
+                android:focusable="true"
+                app:cardBackgroundColor="@android:color/transparent"
+                app:cardCornerRadius="20dp"
+                app:cardElevation="0dp"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toEndOf="@id/back_button"
+                app:layout_constraintTop_toTopOf="parent"
+                app:strokeWidth="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="8dp">
+
+                    <EditText
+                        android:id="@+id/search_placeholder"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:background="@null"
+                        android:fontFamily="@font/poppins_regular"
+                        android:hint="Search here"
+                        android:inputType="text"
+                        android:textColor="#000"
+                        android:textColorHint="#888"
+                        android:textSize="20sp" />
+
+                    <ImageView
+                        android:id="@+id/mic_button"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:clickable="true"
+                        android:contentDescription="Voice search"
+                        android:focusable="true"
+                        android:padding="4dp"
+                        android:src="@drawable/ic_mic"
+                        android:visibility="visible"
+                        app:tint="@color/dark_gray" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- Bottom Section: Partial Search and Recent -->
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/bottom_section"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:paddingHorizontal="8dp"
+        android:clipToPadding="false"
+        app:layout_constraintTop_toBottomOf="@id/search_bar"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="8dp">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/suggestions_recycler_view"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingBottom="16dp"
+                app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+
+            <!-- Recent Searches Header -->
+            <TextView
+                android:id="@+id/recent_header"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:text="Recent"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:fontFamily="@font/poppins_regular"
+                android:paddingVertical="8dp" />
+
+            <!-- Recent Searches RecyclerView -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recent_recycler_view"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+
+            <!-- No Recent Found TextView -->
+            <TextView
+                android:id="@+id/no_recent_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="No recent found"
+                android:textSize="14sp"
+                android:fontFamily="@font/poppins_regular"
+                android:gravity="center"
+                android:padding="16dp"
+                android:visibility="gone" />
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

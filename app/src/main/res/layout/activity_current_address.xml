@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/scrollView"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/white"
+    android:padding="24dp"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+
+        <!-- Progress Bar Placeholder -->
+        <com.aorv.blazerider.StepProgressBar
+            android:id="@+id/stepProgress"
+            android:layout_width="match_parent"
+            android:layout_height="8dp"
+            android:layout_marginTop="16dp"
+            app:step="3" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Current Address"
+            android:textColor="@color/red_orange"
+            android:textStyle="bold"
+            android:textSize="18sp"
+            android:layout_marginTop="32dp"
+            android:layout_marginBottom="32dp" />
+
+
+    <!-- State/Province Dropdown -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/stateLayout"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="State/Province"
+            app:boxStrokeColor="@color/red_orange"
+            app:boxCornerRadiusTopStart="12dp"
+            app:boxCornerRadiusTopEnd="12dp"
+            app:boxCornerRadiusBottomStart="12dp"
+            app:boxCornerRadiusBottomEnd="12dp"
+            app:endIconMode="dropdown_menu">
+
+            <AutoCompleteTextView
+                android:id="@+id/state"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="none"
+                android:focusable="false"
+                android:clickable="true"
+                android:fontFamily="@font/poppins_medium"
+                android:textSize="14sp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+
+
+        <!-- City/Municipality Dropdown -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/cityLayout"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="City/Municipality"
+            app:boxStrokeColor="@color/red_orange"
+            app:boxCornerRadiusTopStart="12dp"
+            app:boxCornerRadiusTopEnd="12dp"
+            app:boxCornerRadiusBottomStart="12dp"
+            app:boxCornerRadiusBottomEnd="12dp"
+            app:endIconMode="dropdown_menu">
+
+            <AutoCompleteTextView
+                android:id="@+id/city"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="none"
+                android:focusable="false"
+                android:clickable="true"
+                android:fontFamily="@font/poppins_medium"
+                android:textSize="14sp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+
+        <!-- Barangay Dropdown -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/barangayLayout"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Barangay"
+            app:boxStrokeColor="@color/red_orange"
+            app:boxCornerRadiusTopStart="12dp"
+            app:boxCornerRadiusTopEnd="12dp"
+            app:boxCornerRadiusBottomStart="12dp"
+            app:boxCornerRadiusBottomEnd="12dp"
+            app:endIconMode="dropdown_menu">
+
+            <AutoCompleteTextView
+                android:id="@+id/barangay"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="none"
+                android:focusable="false"
+                android:clickable="true"
+                android:fontFamily="@font/poppins_medium"
+                android:textSize="14sp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+
+        <!-- House Number Text Field -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/houseNoLayout"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="House No.. Bldg./ Street Name"
+            app:boxStrokeColor="@color/red_orange"
+            app:boxCornerRadiusTopStart="12dp"
+            app:boxCornerRadiusTopEnd="12dp"
+            app:boxCornerRadiusBottomStart="12dp"
+            app:boxCornerRadiusBottomEnd="12dp">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/houseNo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/poppins_medium"
+                android:textSize="14sp" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Next Button -->
+        <Button
+            android:id="@+id/btnNext"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Next"
+            android:textColor="@android:color/white"
+            android:backgroundTint="@color/red_orange"
+            android:layout_marginTop="24dp" />
+
+    </LinearLayout>
+
+</ScrollView>

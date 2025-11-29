@@ -1,0 +1,100 @@
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:id="@+id/bottom_sheet"
+    android:padding="16dp">
+
+    <!-- Header Section -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Blaze Rider"
+        android:textAlignment="center"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp"/>
+
+    <!-- User Info -->
+    <TextView
+        android:id="@+id/tv_user_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textAlignment="center"
+        android:textSize="16sp"
+        android:layout_marginBottom="4dp"/>
+
+    <TextView
+        android:id="@+id/tv_user_email"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textAlignment="center"
+        android:textColor="#888"
+        android:textSize="14sp"
+        android:layout_marginBottom="16dp"/>
+
+    <!-- Divider -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#E0E0E0"
+        android:layout_marginVertical="8dp"/>
+
+    <!-- Menu Items -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <com.google.android.material.button.MaterialButton
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="Your Profile"
+            android:textAlignment="textStart"
+            android:drawablePadding="16dp"
+            android:drawableStart="@drawable/ic_profile"
+            app:iconTint="?attr/colorOnSurface"/>
+
+        <com.google.android.material.button.MaterialButton
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="History"
+            android:textAlignment="textStart"
+            android:drawablePadding="16dp"
+            android:drawableStart="@drawable/ic_history"
+            app:iconTint="?attr/colorOnSurface"/>
+
+        <com.google.android.material.button.MaterialButton
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="Shared Rides"
+            android:textAlignment="textStart"
+            android:drawablePadding="16dp"
+            android:drawableStart="@drawable/ic_shared_rides"
+            app:iconTint="?attr/colorOnSurface"/>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#E0E0E0"
+            android:layout_marginVertical="8dp"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_logout"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="Log Out"
+            android:textColor="@color/red_orange"
+            android:textAlignment="textStart"
+            android:drawablePadding="16dp"
+            android:drawableStart="@drawable/ic_exit" />
+
+
+    </LinearLayout>
+</LinearLayout>

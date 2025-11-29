@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Active State (Selected) -->
+    <item android:state_selected="true">
+        <shape>
+            <solid android:color="#FF0000"/> <!-- Dark Orange -->
+            <corners android:radius="20dp"/>
+        </shape>
+    </item>
+    <!-- Inactive State (Not Selected) -->
+    <item android:state_selected="false">
+        <shape>
+            <solid android:color="@android:color/transparent"/>
+            <corners android:radius="20dp"/>
+        </shape>
+    </item>
+</selector>

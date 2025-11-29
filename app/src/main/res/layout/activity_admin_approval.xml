@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@android:color/white">
+
+    <!-- Progress Bar -->
+    <com.aorv.blazerider.StepProgressBar
+        android:id="@+id/stepProgress"
+        android:layout_width="match_parent"
+        android:layout_height="8dp"
+        android:layout_marginTop="16dp"
+        app:step="4" />
+
+    <!-- Centered Content Container -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center">
+
+        <!-- Spacer -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="48dp" />
+
+        <!-- Envelope Icon -->
+        <ImageView
+            android:layout_width="100dp"
+            android:layout_height="100dp"
+            android:src="@drawable/ic_users"
+            android:contentDescription="User icon"
+            app:tint="@color/red_orange" />
+
+        <!-- Email Verification Text -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Admin Approval"
+            android:textColor="@color/red_orange"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:layout_marginTop="24dp" />
+
+        <!-- Subtext -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="In order to make sure our community holds up a standard, we don't allow any profiles to get in. You will receive an email once you were approved. "
+            android:textColor="@android:color/black"
+            android:textSize="14sp"
+            android:gravity="center"
+            android:layout_marginTop="12dp"
+            android:paddingHorizontal="16dp" />
+
+        <!-- Verify Email Button -->
+<!--        <Button-->
+<!--            android:id="@+id/btnVerify"-->
+<!--            android:layout_width="match_parent"-->
+<!--            android:layout_height="wrap_content"-->
+<!--            android:text="Verify Email Address"-->
+<!--            android:textAllCaps="false"-->
+<!--            android:textColor="@android:color/white"-->
+<!--            android:backgroundTint="@color/red_orange"-->
+<!--            android:layout_marginTop="32dp"-->
+<!--            android:paddingVertical="12dp"-->
+<!--            android:textSize="16sp" />-->
+
+        <!-- Logout Text -->
+        <TextView
+            android:id="@+id/btnLogout"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Logout"
+            android:textColor="@color/red_orange"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginTop="24dp" />
+
+    </LinearLayout>
+</LinearLayout>

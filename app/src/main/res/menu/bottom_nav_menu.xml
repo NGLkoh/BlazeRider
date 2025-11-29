@@ -1,0 +1,23 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--This XML file defines the bottom navigation menu for the application.-->
+    <item
+        android:id="@+id/nav_location"
+        android:icon="@drawable/ic_location"
+        android:title="Location" />
+    <item
+        android:id="@+id/nav_announcements"
+        android:icon="@drawable/ic_announcement"
+        android:title="Announcement" />
+    <item
+        android:id="@+id/nav_home"
+        android:icon="@drawable/ic_home"
+        android:title="Feed" />
+    <item
+        android:id="@+id/nav_shared_rides"
+        android:icon="@drawable/ic_shared_rides"
+        android:title="Share Rides" />
+    <item
+        android:id="@+id/nav_hamburger"
+        android:icon="@drawable/ic_hamburger"
+        android:title="Menu" />
+</menu>
