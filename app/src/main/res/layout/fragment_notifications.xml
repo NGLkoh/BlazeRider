@@ -38,17 +38,35 @@
         android:layout_width="match_parent"
         android:layout_height="8dp" />
 
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginStart="16dp">
+
     <!-- Mark All as Read Button -->
     <Button
         android:id="@+id/mark_all_read_button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Mark All as Read"
-        android:layout_marginStart="16dp"
         android:textSize="14sp"
         android:fontFamily="@font/poppins_regular"
         android:paddingStart="16dp"
         android:paddingEnd="16dp" />
+
+    <!-- Clear All Button -->
+    <Button
+        android:id="@+id/clear_all_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Clear All"
+        android:layout_marginStart="8dp"
+        android:textSize="14sp"
+        android:fontFamily="@font/poppins_regular"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp" />
+    </LinearLayout>
 
     <!-- Padding -->
     <View

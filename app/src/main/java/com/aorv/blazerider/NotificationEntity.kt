@@ -10,5 +10,6 @@ data class NotificationEntity(
     val title: String,
     val body: String,
     val chatId: String?,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val isRead: Boolean = false
 )

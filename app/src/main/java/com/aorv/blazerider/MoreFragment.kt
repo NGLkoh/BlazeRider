@@ -120,7 +120,7 @@ class MoreFragment : Fragment() {
 
         view.findViewById<LinearLayout>(R.id.notification).setOnClickListener {
             parentFragmentManager.beginTransaction()
-                .replace(R.id.fragment_container, NotificationsFragment())
+                .replace(R.id.fragment_container, NotificationsFragment.newInstance())
                 .addToBackStack(null)
                 .commit()
         }
