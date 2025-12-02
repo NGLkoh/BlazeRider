@@ -2,6 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:orientation="vertical"
     android:fitsSystemWindows="true">
 
@@ -9,23 +10,37 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@drawable/gradient_orange"
-        android:paddingTop="24dp"
-        android:paddingBottom="16dp"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
         android:clipChildren="false"
-        android:clipToPadding="false">
+        android:clipToPadding="false"
+        android:paddingStart="16dp"
+        android:paddingTop="24dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="16dp">
+
+        <TextView
+            android:id="@+id/tvTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignParentStart="true"
+            android:layout_alignParentTop="true"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Users"
+            android:textColor="@android:color/white"
+            android:textSize="24sp"
+            android:textStyle="bold" />
 
         <LinearLayout
             android:id="@+id/toggleButtonsLayout"
             android:layout_width="wrap_content"
             android:layout_height="39dp"
-            android:layout_alignParentEnd="true"
+            android:layout_below="@id/tvTitle"
+            android:layout_marginTop="12dp"
+            android:layout_alignParentStart="true"
             android:background="@drawable/toggle_background"
             android:orientation="horizontal"
             android:padding="1dp">
 
-            <!-- Pending Button with Badge -->
             <FrameLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -34,7 +49,7 @@
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnPending"
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
+                    android:layout_height="38dp"
                     android:background="@drawable/toggle_button_selector"
                     android:paddingStart="12dp"
                     android:paddingEnd="12dp"
@@ -56,7 +71,6 @@
                     android:visibility="gone" />
             </FrameLayout>
 
-            <!-- Accepted Button with Badge -->
             <FrameLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content">
@@ -87,21 +101,6 @@
             </FrameLayout>
         </LinearLayout>
 
-        <TextView
-            android:id="@+id/tvTitle"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Users"
-            android:textSize="24sp"
-            android:textStyle="bold"
-            android:textColor="@android:color/white"
-            android:layout_alignParentStart="true"
-            android:layout_centerVertical="true"
-            android:layout_toStartOf="@id/toggleButtonsLayout"
-            android:layout_marginEnd="16dp"
-            android:ellipsize="end"
-            android:maxLines="1"/>
-
     </RelativeLayout>
 
     <RelativeLayout
@@ -117,7 +116,9 @@
             android:hint="Search by name..."
             android:background="@drawable/search_bar_background"
             android:padding="12dp"
-            android:layout_marginBottom="16dp"/>
+            android:layout_marginBottom="16dp"
+            android:inputType="text"
+            android:maxLines="1" />
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/recyclerViewUserRequests"

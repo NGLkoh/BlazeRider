@@ -16,6 +16,7 @@ import android.widget.PopupWindow
 import android.widget.TextView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.bumptech.glide.Glide
@@ -27,7 +28,8 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class PostAdapter(
-    private val onDeletePost: (Post) -> Unit
+    private val onDeletePost: (Post) -> Unit,
+    private val onCommentClick: (Post) -> Unit
 ) : RecyclerView.Adapter<PostAdapter.PostViewHolder>() {
 
     private var posts = listOf<Post>()
@@ -156,6 +158,11 @@ class PostAdapter(
             // Set counts
             val totalReactions = post.reactionCount.values.sum()
             reactionsCount.text = when { totalReactions > 0 -> "$totalReactions reactions" else -> "" }
+            reactionsCount.setOnClickListener {
+                if (totalReactions > 0) {
+                    showReactionsDialog(post.id)
+                }
+            }
             val numComments = post.commentsCount
             if (numComments > 0) {
                 commentsCount.visibility = View.VISIBLE
@@ -197,15 +204,29 @@ class PostAdapter(
 
             // Comment action
             commentContainer.setOnClickListener {
-                val intent = Intent(itemView.context, CommentsActivity::class.java).apply {
-                    putExtra("POST_ID", post.id)
-                }
-                itemView.context.startActivity(intent)
+                onCommentClick(post)
             }
 
             shareContainer.setOnClickListener { /* Implement share */ }
         }
-        
+
+        private fun showReactionsDialog(postId: String) {
+            val dialogView = LayoutInflater.from(itemView.context).inflate(R.layout.dialog_reactions, null)
+            val reactionsRecyclerView = dialogView.findViewById<RecyclerView>(R.id.reactions_recycler_view)
+            reactionsRecyclerView.layoutManager = LinearLayoutManager(itemView.context)
+
+            db.collection("posts").document(postId).collection("reactions").get()
+                .addOnSuccessListener {
+                    val reactions = it.toObjects(Reaction::class.java)
+                    reactionsRecyclerView.adapter = ReactionsAdapter(reactions)
+                }
+
+            AlertDialog.Builder(itemView.context)
+                .setView(dialogView)
+                .setPositiveButton("Close", null)
+                .show()
+        }
+
         private fun showPostOptionsMenu(view: View, post: Post) {
             val popup = PopupMenu(view.context, view)
             popup.menuInflater.inflate(R.menu.post_options_menu, popup.menu)
@@ -293,9 +314,11 @@ class PostAdapter(
             updateLikeIcon(newReaction)
             val postRef = db.collection("posts").document(postId)
             val reactionRef = postRef.collection("reactions").document(user.uid)
+            val userRef = db.collection("users").document(user.uid)
 
             db.runTransaction { transaction ->
                 val post = transaction.get(postRef)
+                val userDoc = transaction.get(userRef)
                 val reactionCount = post.get("reactionCount") as? Map<String, Long> ?: emptyMap()
                 val updatedCount = reactionCount.toMutableMap()
 
@@ -307,7 +330,11 @@ class PostAdapter(
                 }
                 updatedCount[newReaction] = (updatedCount[newReaction] ?: 0L) + 1
 
-                transaction.set(reactionRef, mapOf("reactionType" to newReaction, "timestamp" to FieldValue.serverTimestamp(), "userId" to user.uid))
+                val firstName = userDoc.getString("firstName") ?: ""
+                val lastName = userDoc.getString("lastName") ?: ""
+                val userFullName = "$firstName $lastName".trim()
+
+                transaction.set(reactionRef, mapOf("reactionType" to newReaction, "timestamp" to FieldValue.serverTimestamp(), "userId" to user.uid, "userFullName" to userFullName))
                 transaction.update(postRef, "reactionCount", updatedCount)
                 null
             }.addOnFailureListener {

@@ -1,11 +1,14 @@
 package com.aorv.blazerider
 
+import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
@@ -25,6 +28,12 @@ class AnnouncementsFragment : Fragment() {
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
     private var postsListener: ListenerRegistration? = null
+
+    private val commentsActivityLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK && result.data?.getBooleanExtra(CommentsActivity.COMMENT_ADDED, false) == true) {
+            loadAnnouncements()
+        }
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -48,9 +57,15 @@ class AnnouncementsFragment : Fragment() {
         // Setup RecyclerView
         recyclerView = view.findViewById(R.id.feed_recycler_view)
         recyclerView.layoutManager = LinearLayoutManager(context)
-        postAdapter = PostAdapter { post ->
-            deletePost(post)
-        }
+        postAdapter = PostAdapter(
+            onDeletePost = { post -> deletePost(post) },
+            onCommentClick = { post ->
+                val intent = Intent(requireContext(), CommentsActivity::class.java).apply {
+                    putExtra("POST_ID", post.id)
+                }
+                commentsActivityLauncher.launch(intent)
+            }
+        )
         recyclerView.adapter = postAdapter
 
         // Load current user’s profile picture (if you have one)
@@ -103,6 +118,7 @@ class AnnouncementsFragment : Fragment() {
     }
 
     private fun loadAnnouncements() {
+        postsListener?.remove()
         postsListener = db.collection("posts")
             .whereEqualTo("admin", true) // ✅ Filter: only admin posts
             .orderBy("createdAt", Query.Direction.DESCENDING)
@@ -123,6 +139,7 @@ class AnnouncementsFragment : Fragment() {
                             createdAt = doc.getTimestamp("createdAt")?.toDate(),
                             imageUris = imageUris,
                             reactionCount = doc.get("reactionCount") as? Map<String, Long> ?: emptyMap(),
+                            commentsCount = doc.getLong("commentsCount") ?: 0,
                             admin = doc.getBoolean("admin") ?: false
                         )
                     }

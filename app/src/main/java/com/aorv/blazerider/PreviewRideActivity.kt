@@ -128,10 +128,12 @@ class PreviewRideActivity : AppCompatActivity(), OnMapReadyCallback {
                     val userDoc = firestore.collection("users").document(userId).get().await()
                     val state = userDoc.getString("state")
                     val location = userDoc.get("location") as? GeoPoint
+                    val firstName = userDoc.getString("firstName") ?: ""
+                    val lastName = userDoc.getString("lastName") ?: ""
+                    val fullName = "$firstName $lastName".trim()
                     val profileImageUrl = userDoc.getString("profileImageUrl")
-                    val firstName = userDoc.getString("firstName") ?: "Unknown"
 
-                    joinedUsersList.add(JoinedUser(userId, firstName))
+                    joinedUsersList.add(JoinedUser(userId, if (fullName.isNotEmpty()) fullName else "Unknown User", profileImageUrl))
 
                     // Skip if user is offline or location is (0,0)
                     if (state != "online" || location == null || (location.latitude == 0.0 && location.longitude == 0.0)) {
@@ -160,7 +162,7 @@ class PreviewRideActivity : AppCompatActivity(), OnMapReadyCallback {
                         map.addMarker(
                             MarkerOptions()
                                 .position(userLatLng)
-                                .title(firstName)
+                                .title(if (fullName.isNotEmpty()) fullName else "Unknown User")
                                 .icon(bitmap?.let { BitmapDescriptorFactory.fromBitmap(it) }
                                     ?: BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE))
                         )

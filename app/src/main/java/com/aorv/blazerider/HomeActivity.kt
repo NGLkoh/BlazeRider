@@ -20,7 +20,6 @@ import android.util.Log
 import androidx.lifecycle.ViewModelProvider
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
-import com.google.android.gms.maps.model.LatLng
 
 class HomeActivity : AppCompatActivity() {
 
@@ -136,6 +135,17 @@ class HomeActivity : AppCompatActivity() {
             .addOnFailureListener { e ->
                 Log.e("HomeActivity", "Failed to set offline status: ${e.message}")
             }
+    }
+
+    override fun onBackPressed() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Exit")
+            .setMessage("Are you sure you want to exit the app?")
+            .setPositiveButton("Yes") { _, _ ->
+                finishAffinity()
+            }
+            .setNegativeButton("No", null)
+            .show()
     }
 
     private fun checkNotificationPermission() {

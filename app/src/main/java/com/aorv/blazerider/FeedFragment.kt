@@ -1,5 +1,6 @@
 package com.aorv.blazerider
 
+import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -9,6 +10,7 @@ import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
@@ -30,6 +32,12 @@ class FeedFragment : Fragment() {
     private var postsListener: ListenerRegistration? = null
     private var unreadMessagesListener: ListenerRegistration? = null
     private lateinit var chatBadge: TextView
+
+    private val commentsActivityLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK && result.data?.getBooleanExtra(CommentsActivity.COMMENT_ADDED, false) == true) {
+            loadPosts()
+        }
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -76,9 +84,15 @@ class FeedFragment : Fragment() {
 
         recyclerView = view.findViewById(R.id.feed_recycler_view)
         recyclerView.layoutManager = LinearLayoutManager(context)
-        postAdapter = PostAdapter { post ->
-            deletePost(post)
-        }
+        postAdapter = PostAdapter(
+            onDeletePost = { post -> deletePost(post) },
+            onCommentClick = { post ->
+                val intent = Intent(requireContext(), CommentsActivity::class.java).apply {
+                    putExtra("POST_ID", post.id)
+                }
+                commentsActivityLauncher.launch(intent)
+            }
+        )
         recyclerView.adapter = postAdapter
 
         val userImage = view.findViewById<ShapeableImageView>(R.id.user_image)
@@ -162,6 +176,7 @@ class FeedFragment : Fragment() {
         }
     }
     private fun loadPosts() {
+        postsListener?.remove()
         postsListener = db.collection("posts")
             .whereEqualTo("admin", false)  // Only fetch non-admin posts
             .orderBy("createdAt", Query.Direction.DESCENDING)
@@ -181,6 +196,7 @@ class FeedFragment : Fragment() {
                             createdAt = doc.getTimestamp("createdAt")?.toDate(),
                             imageUris = imageUris,
                             reactionCount = doc.get("reactionCount") as? Map<String, Long> ?: emptyMap(),
+                            commentsCount = doc.getLong("commentsCount") ?: 0L,
                             admin = doc.getBoolean("admin") ?: false
                         )
                     }

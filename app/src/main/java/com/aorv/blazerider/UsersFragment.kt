@@ -46,12 +46,27 @@ class UsersFragment : Fragment() {
         tvTitle = view.findViewById(R.id.tvTitle)
         noRequestsText = view.findViewById(R.id.noRequestsText)
 
+        // Check for initial tab argument
+        arguments?.getString("initial_tab")?.let {
+            if (it == "accepted") {
+                showPending = false
+            }
+        }
+
         // Setup RecyclerView
         userAdapter = UserAdapter(userRequestList, requireContext(), showPending) { user ->
             confirmUser(user)
         }
         recyclerView.layoutManager = LinearLayoutManager(context)
         recyclerView.adapter = userAdapter
+
+        // Set initial UI state
+        updateButtonStates()
+        if (showPending) {
+            tvTitle.text = "Pending Users"
+        } else {
+            tvTitle.text = "Confirmed Users"
+        }
 
         // Load users and setup listeners
         loadUsers()

@@ -32,7 +32,7 @@
         android:theme="@style/Theme.AORVBlazeRider"
         tools:targetApi="31">
         <activity
-            android:name=".MainActivity"
+            android:name=".MainMenuActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -44,7 +44,7 @@
             android:name=".HomeActivity"
             android:theme="@style/AppTheme"
             />
-        <activity android:name=".MainMenuActivity" />
+        <activity android:name=".MainActivity" />
         <activity android:name=".SignInActivity" />
         <activity android:name=".ForgotPasswordActivity" />
         <activity android:name=".SignUpActivity"
@@ -110,6 +110,12 @@
         <activity android:name=".ChatActivity"
             android:theme="@style/AppTheme"
             />
+        <activity
+            android:name=".DisplayNotification"
+            android:theme="@style/Theme.Material3.DynamicColors.Light.NoActionBar" />
+        <activity
+            android:name=".HistoryActivity"
+            android:theme="@style/Theme.Material3.DynamicColors.Light.NoActionBar" />
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyBdsslBjsFC919mvY0osI8hAmrPOzFp_LE"/>

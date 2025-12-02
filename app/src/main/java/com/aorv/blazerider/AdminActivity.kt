@@ -37,7 +37,14 @@ class AdminActivity : AppCompatActivity() {
             var selectedFragment: Fragment? = null
             when (item.itemId) {
                 R.id.nav_dashboard -> selectedFragment = DashboardFragment()
-                R.id.nav_users -> selectedFragment = UsersFragment()
+                R.id.nav_users -> {
+                    val args = Bundle().apply {
+                        putString("initial_tab", "accepted")
+                    }
+                    selectedFragment = UsersFragment().apply {
+                        arguments = args
+                    }
+                }
                 R.id.nav_events -> selectedFragment = EventsFragment()
                 R.id.nav_more -> selectedFragment = MoreFragment.newInstance(isAdmin = true) // Pass isAdmin
             }

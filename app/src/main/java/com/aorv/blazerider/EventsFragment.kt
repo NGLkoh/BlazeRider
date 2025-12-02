@@ -39,6 +39,14 @@ class EventsFragment : Fragment() {
         }
     }
 
+    private val commentsActivityLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK && result.data?.getBooleanExtra(CommentsActivity.COMMENT_ADDED, false) == true) {
+            if (selectedStartDate != null && selectedEndDate != null) {
+                fetchPostsForDate(selectedStartDate!!, selectedEndDate!!)
+            }
+        }
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -54,9 +62,15 @@ class EventsFragment : Fragment() {
         val whatsOnMindButton = view.findViewById<View>(R.id.btn_whats_on_mind)
         val addImageButton = view.findViewById<View>(R.id.btn_add_image)
 
-        postAdapter = PostAdapter { post ->
-            deletePost(post)
-        }
+        postAdapter = PostAdapter(
+            onDeletePost = { post -> deletePost(post) },
+            onCommentClick = { post ->
+                val intent = Intent(requireContext(), CommentsActivity::class.java).apply {
+                    putExtra("POST_ID", post.id)
+                }
+                commentsActivityLauncher.launch(intent)
+            }
+        )
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
         recyclerView.adapter = postAdapter
 

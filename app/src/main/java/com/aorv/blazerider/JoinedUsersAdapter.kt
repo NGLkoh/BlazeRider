@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
+import com.bumptech.glide.Glide
 import com.google.firebase.auth.FirebaseAuth
 
 class JoinedUsersAdapter(
@@ -32,11 +33,23 @@ class JoinedUsersAdapter(
     }
 
     inner class UserViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val userProfilePictureImageView: ImageView = itemView.findViewById(R.id.user_profile_picture)
         private val userNameTextView: TextView = itemView.findViewById(R.id.user_name)
         private val messageIcon: ImageView = itemView.findViewById(R.id.message_icon)
 
         fun bind(user: JoinedUser) {
             userNameTextView.text = user.name
+
+            if (!user.profilePictureUrl.isNullOrEmpty()) {
+                Glide.with(itemView.context)
+                    .load(user.profilePictureUrl)
+                    .placeholder(R.drawable.ic_profile)
+                    .error(R.drawable.ic_profile)
+                    .circleCrop()
+                    .into(userProfilePictureImageView)
+            } else {
+                userProfilePictureImageView.setImageResource(R.drawable.ic_profile)
+            }
 
             if (user.userId == currentUserId) {
                 messageIcon.visibility = View.GONE

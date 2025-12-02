@@ -1,8 +1,11 @@
 package com.aorv.blazerider
 
+import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -10,22 +13,21 @@ import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.PopupMenu
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
-import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import androidx.viewpager2.widget.ViewPager2
+import com.bumptech.glide.Glide
 import com.google.android.material.imageview.ShapeableImageView
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
-import com.bumptech.glide.Glide
 import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.util.*
 
 class CommentsActivity : AppCompatActivity() {
 
@@ -33,45 +35,41 @@ class CommentsActivity : AppCompatActivity() {
     private val auth = FirebaseAuth.getInstance()
     private lateinit var recyclerView: RecyclerView
     private lateinit var commentsAdapter: CommentsAdapter
+    private var commentAdded = false
+
+    companion object {
+        const val COMMENT_ADDED = "comment_added"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
         setContentView(R.layout.activity_comments)
 
-        // Set up Toolbar
         val toolbar = findViewById<Toolbar>(R.id.comments_toolbar)
         setSupportActionBar(toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(false)
 
-        // Apply slide-up transition
         overridePendingTransition(R.anim.slide_up, R.anim.stay)
 
-        // Set up close button
         findViewById<ImageButton>(R.id.comments_close_button).setOnClickListener {
             finish()
         }
 
-        // Load current user profile image
         val profilePic = findViewById<ShapeableImageView>(R.id.comment_profile_pic)
         loadCurrentUserProfileImage(profilePic)
 
-        // Get postId from intent
         val postId = intent.getStringExtra("POST_ID") ?: return
 
-        // Set up RecyclerView
         recyclerView = findViewById(R.id.comment_list)
         recyclerView.layoutManager = LinearLayoutManager(this)
-        commentsAdapter = CommentsAdapter()
+        commentsAdapter = CommentsAdapter(postId)
         recyclerView.adapter = commentsAdapter
 
-        // Load comments
         loadComments(postId)
 
-        // Handle comment input
         val commentInput = findViewById<EditText>(R.id.comment_input)
         val submitButton = findViewById<ImageButton>(R.id.comment_submit_button)
-        val addImageButton = findViewById<ImageButton>(R.id.comment_add_image_button)
 
         commentInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -88,10 +86,6 @@ class CommentsActivity : AppCompatActivity() {
                 submitComment(postId, content)
                 commentInput.text.clear()
             }
-        }
-
-        addImageButton.setOnClickListener {
-            // TODO: Implement image picking logic
         }
     }
 
@@ -141,27 +135,17 @@ class CommentsActivity : AppCompatActivity() {
                                         profileImageUrl = userDoc.getString("profileImageUrl") ?: "",
                                         content = doc.getString("content") ?: "",
                                         createdAt = doc.getTimestamp("createdAt")?.toDate(),
-                                        imageUris = doc.get("imageUris") as? List<String> ?: emptyList(),
-                                        reactionCount = doc.get("reactionCount") as? Map<String, Long> ?: mapOf(
-                                            "angry" to 0L,
-                                            "haha" to 0L,
-                                            "like" to 0L,
-                                            "love" to 0L,
-                                            "sad" to 0L,
-                                            "wow" to 0L
-                                        )
+                                        imageUris = emptyList(),
+                                        reactionCount = doc.get("reactionCount") as? Map<String, Long> ?: emptyMap()
                                     )
                                     comments.add(comment)
-                                    // Sort comments by createdAt to maintain order
                                     comments.sortBy { it.createdAt }
                                     commentsAdapter.submitComments(comments)
-                                    // Toggle visibility of RecyclerView and no comments layout
                                     recyclerView.visibility = if (comments.isEmpty()) View.GONE else View.VISIBLE
                                     noCommentsLayout.visibility = if (comments.isEmpty()) View.VISIBLE else View.GONE
                                 }
                             }
                     }
-                    // Handle case when snapshot is empty (no documents)
                     if (snapshot.documents.isEmpty()) {
                         recyclerView.visibility = View.GONE
                         noCommentsLayout.visibility = View.VISIBLE
@@ -172,150 +156,120 @@ class CommentsActivity : AppCompatActivity() {
 
     private fun submitComment(postId: String, content: String) {
         val user = auth.currentUser ?: return
+
         val comment = hashMapOf(
             "userId" to user.uid,
             "content" to content,
             "createdAt" to FieldValue.serverTimestamp(),
             "imageUris" to emptyList<String>(),
-            "reactionCount" to mapOf(
-                "angry" to 0L,
-                "haha" to 0L,
-                "like" to 0L,
-                "love" to 0L,
-                "sad" to 0L,
-                "wow" to 0L
-            )
+            "reactionCount" to emptyMap<String, Long>()
         )
+
         db.collection("posts").document(postId)
             .collection("comments")
             .add(comment)
-            .addOnSuccessListener { 
+            .addOnSuccessListener {
                 db.collection("posts").document(postId).update("commentsCount", FieldValue.increment(1))
+                commentAdded = true
+                Toast.makeText(this@CommentsActivity, "Comment submitted", Toast.LENGTH_SHORT).show()
+            }.addOnFailureListener {
+                Toast.makeText(this@CommentsActivity, "Failed to submit comment", Toast.LENGTH_SHORT).show()
             }
     }
 
-    private fun deleteComment(postId: String, commentId: String) {
+    fun deleteComment(postId: String, commentId: String) {
         db.collection("posts").document(postId)
             .collection("comments").document(commentId)
             .delete()
-            .addOnSuccessListener { 
+            .addOnSuccessListener {
                 db.collection("posts").document(postId).update("commentsCount", FieldValue.increment(-1))
+                commentAdded = true
             }
     }
 
     override fun finish() {
+        if (commentAdded) {
+            val resultIntent = Intent()
+            resultIntent.putExtra(COMMENT_ADDED, true)
+            setResult(Activity.RESULT_OK, resultIntent)
+        }
         super.finish()
-        // Apply slide-down transition
         overridePendingTransition(R.anim.stay, R.anim.slide_down)
     }
-}
 
-class CommentsAdapter : RecyclerView.Adapter<CommentsAdapter.CommentViewHolder>() {
+    inner class CommentsAdapter(private val postId: String) : RecyclerView.Adapter<CommentsAdapter.CommentViewHolder>() {
 
-    private var comments = listOf<Comment>()
+        private var comments = listOf<Comment>()
 
-    fun submitComments(newComments: List<Comment>) {
-        comments = newComments
-        notifyDataSetChanged()
-    }
+        fun submitComments(newComments: List<Comment>) {
+            comments = newComments
+            notifyDataSetChanged()
+        }
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): CommentViewHolder {
-        val view = LayoutInflater.from(parent.context)
-            .inflate(R.layout.item_comment, parent, false)
-        return CommentViewHolder(view)
-    }
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): CommentViewHolder {
+            val view = LayoutInflater.from(parent.context)
+                .inflate(R.layout.item_comment, parent, false)
+            return CommentViewHolder(view)
+        }
 
-    override fun onBindViewHolder(holder: CommentViewHolder, position: Int) {
-        holder.bind(comments[position])
-    }
+        override fun onBindViewHolder(holder: CommentViewHolder, position: Int) {
+            holder.bind(comments[position])
+        }
 
-    override fun getItemCount(): Int = comments.size
+        override fun getItemCount(): Int = comments.size
 
-    inner class CommentViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        private val profilePic = itemView.findViewById<ShapeableImageView>(R.id.item_comment_profile_pic)
-        private val userName = itemView.findViewById<TextView>(R.id.comment_user_name)
-        private val timestamp = itemView.findViewById<TextView>(R.id.comment_timestamp)
-        private val content = itemView.findViewById<TextView>(R.id.comment_content)
-        private val imageContainer = itemView.findViewById<ConstraintLayout>(R.id.comment_image_container)
-        private val imageViewPager = itemView.findViewById<ViewPager2>(R.id.comment_image_view_pager)
-        private val imageCounter = itemView.findViewById<TextView>(R.id.comment_image_counter)
-        private val likeButton = itemView.findViewById<ImageButton>(R.id.comment_like_button)
+        inner class CommentViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+            private val profilePic = itemView.findViewById<ShapeableImageView>(R.id.item_comment_profile_pic)
+            private val userName = itemView.findViewById<TextView>(R.id.comment_user_name)
+            private val timestamp = itemView.findViewById<TextView>(R.id.comment_timestamp)
+            private val content = itemView.findViewById<TextView>(R.id.comment_content)
+            private val moreButton = itemView.findViewById<ImageButton>(R.id.comment_more_button)
 
-        fun bind(comment: Comment) {
-            // Profile picture for commenter
-            if (comment.profileImageUrl.isNotEmpty()) {
-                Glide.with(itemView.context)
-                    .load(comment.profileImageUrl)
-                    .placeholder(R.drawable.ic_anonymous)
-                    .error(R.drawable.ic_anonymous)
-                    .into(profilePic)
-            } else {
-                profilePic.setImageResource(R.drawable.ic_anonymous)
-            }
-
-            // User name
-            userName.text = "${comment.firstName} ${comment.lastName}".trim()
-
-            // Timestamp
-            timestamp.text = comment.createdAt?.let {
-                SimpleDateFormat("MMM dd, yyyy, hh:mm a", Locale.getDefault()).format(it)
-            } ?: ""
-
-            // Content
-            content.text = comment.content
-
-            // Images
-            if (comment.imageUris.isNotEmpty()) {
-                imageContainer.visibility = View.VISIBLE
-                imageViewPager.adapter = ImagePagerAdapter(comment.imageUris)
-                imageCounter.visibility = if (comment.imageUris.size > 1) View.VISIBLE else View.GONE
-                if (comment.imageUris.size > 1) {
-                    imageCounter.text = "1/${comment.imageUris.size}"
+            fun bind(comment: Comment) {
+                if (comment.profileImageUrl.isNotEmpty()) {
+                    Glide.with(itemView.context)
+                        .load(comment.profileImageUrl)
+                        .placeholder(R.drawable.ic_anonymous)
+                        .error(R.drawable.ic_anonymous)
+                        .into(profilePic)
+                } else {
+                    profilePic.setImageResource(R.drawable.ic_anonymous)
                 }
-                imageViewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
-                    override fun onPageSelected(position: Int) {
-                        imageCounter.text = "${position + 1}/${comment.imageUris.size}"
+
+                userName.text = "${comment.firstName} ${comment.lastName}".trim()
+
+                timestamp.text = comment.createdAt?.let {
+                    SimpleDateFormat("MMM dd, yyyy, hh:mm a", Locale.getDefault()).format(it)
+                } ?: ""
+
+                if (comment.content.isNotEmpty()) {
+                    content.visibility = View.VISIBLE
+                    content.text = comment.content
+                } else {
+                    content.visibility = View.GONE
+                }
+
+                val currentUser = auth.currentUser
+                if (currentUser != null && currentUser.uid == comment.userId) {
+                    moreButton.visibility = View.VISIBLE
+                    moreButton.setOnClickListener { view ->
+                        val popup = PopupMenu(view.context, view)
+                        popup.menu.add("Delete")
+                        popup.setOnMenuItemClickListener { menuItem ->
+                            when (menuItem.title) {
+                                "Delete" -> {
+                                    deleteComment(postId, comment.id)
+                                    true
+                                }
+                                else -> false
+                            }
+                        }
+                        popup.show()
                     }
-                })
-            } else {
-                imageContainer.visibility = View.GONE
-            }
-
-            // Like button
-            likeButton.setOnClickListener {
-                // TODO: Implement like functionality for comments
-                // Placeholder: Update Firestore with like data
+                } else {
+                    moreButton.visibility = View.GONE
+                }
             }
         }
-    }
-
-    inner class ImagePagerAdapter(private val imageUrls: List<String>) :
-        RecyclerView.Adapter<ImagePagerAdapter.ViewHolder>() {
-
-        inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-            val imageView: ImageView = itemView.findViewById(android.R.id.icon)
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-            val imageView = ImageView(parent.context).apply {
-                id = android.R.id.icon
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-                scaleType = ImageView.ScaleType.CENTER_CROP
-            }
-            return ViewHolder(imageView)
-        }
-
-        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            Glide.with(holder.imageView)
-                .load(imageUrls[position])
-                .placeholder(R.drawable.ic_error_image)
-                .error(R.drawable.ic_error_image)
-                .into(holder.imageView)
-        }
-
-        override fun getItemCount(): Int = imageUrls.size
     }
 }
