@@ -69,6 +69,7 @@ class EditProfileActivity : AppCompatActivity() {
         val cameraIcon = findViewById<ImageView>(R.id.camera_icon)
         val firstName = findViewById<EditText>(R.id.firstName)
         val lastName = findViewById<EditText>(R.id.lastName)
+        val email = findViewById<EditText>(R.id.email)
         val birthdate = findViewById<EditText>(R.id.birthdate)
         val gender = findViewById<AutoCompleteTextView>(R.id.gender)
         provinceDropdown = findViewById<AutoCompleteTextView>(R.id.province)
@@ -164,6 +165,7 @@ class EditProfileActivity : AppCompatActivity() {
         // Load existing user data
         val user = auth.currentUser
         if (user != null) {
+            email.setText(user.email)
             db.collection("users").document(user.uid).get()
                 .addOnSuccessListener { document ->
                     if (document.exists()) {
@@ -217,7 +219,6 @@ class EditProfileActivity : AppCompatActivity() {
         }
 
         // Save changes
-        // In EditProfileActivity.kt, inside onCreate
         btnSaveChanges.setOnClickListener {
             when {
                 firstName.text.isEmpty() -> {
@@ -288,6 +289,11 @@ class EditProfileActivity : AppCompatActivity() {
                             "address" to address.text.toString(),
                             "verified" to true
                         )
+
+                        // Add the user's email to the data to be saved
+                        user.email?.let {
+                            userData["email"] = it
+                        }
 
                         if (profileImageUri != null) {
                             val storageRef = storage.reference.child("profile_images/${user.uid}.jpg")

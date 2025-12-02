@@ -47,19 +47,6 @@
         android:layout_height="wrap_content"
         android:gravity="end"
         android:padding="10dp">
-
-        <Button
-            android:id="@+id/btnDeleteSelected"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Delete Selected" />
-
-        <Button
-            android:id="@+id/btnClearAll"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:text="Clear All" />
     </LinearLayout>
 
 

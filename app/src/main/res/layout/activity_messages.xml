@@ -34,7 +34,7 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:fontFamily="@font/sunborn_regular"
-            android.text="Blaze Rider"
+            android:text="Blaze Rider"
             android:textColor="@android:color/white"
             android:textSize="24sp"
             android:layout_marginEnd="8dp"
@@ -67,16 +67,14 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_margin="16dp"
-        android:gravity="center_vertical">
+        android:orientation="vertical"
+        android:layout_margin="16dp">
 
         <!-- Search Box -->
         <LinearLayout
             android:id="@+id/search_box"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="48dp"
-            android:layout_weight="1"
             android:paddingHorizontal="12dp"
             android:background="@drawable/search_background"
             android:gravity="center_vertical"
@@ -86,7 +84,7 @@
                 android:id="@+id/search_input"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android.layout_weight="1"
+                android:layout_weight="1"
                 android:background="@android:color/transparent"
                 android:hint="Search"
                 android:inputType="text"
@@ -101,14 +99,38 @@
                 android:contentDescription="Search" />
         </LinearLayout>
 
-        <!-- Unread Button -->
-        <Button
-            android:id="@+id/btn_unread"
+        <!-- Filter Chips -->
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/filter_chip_group"
             android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:layout_marginStart="8dp"
-            android:text="Unread" />
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="8dp"
+            app:chipSpacingHorizontal="8dp"
+            app:singleSelection="true">
 
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_all"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:text="All" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_unread"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Unread" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_groups"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Groups" />
+        </com.google.android.material.chip.ChipGroup>
     </LinearLayout>
 
     <!-- Messages RecyclerView -->

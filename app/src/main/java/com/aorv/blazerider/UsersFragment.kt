@@ -140,7 +140,7 @@ class UsersFragment : Fragment() {
     private fun setupButtonListeners() {
         btnPending.setOnClickListener {
             showPending = true
-            tvTitle.text = "User Requests"
+            tvTitle.text = "Pending Users"
             updateButtonStates()
             filterUsers(searchBar.text.toString())
         }

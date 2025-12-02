@@ -35,7 +35,6 @@ class MessagesActivity : AppCompatActivity() {
     private val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
     private var chatListener: ListenerRegistration? = null
     private lateinit var messageReceiver: BroadcastReceiver
-    private var unreadFilterEnabled = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,9 +86,8 @@ class MessagesActivity : AppCompatActivity() {
             }
         })
 
-        // Handle unread button click
-        binding.btnUnread.setOnClickListener {
-            unreadFilterEnabled = !unreadFilterEnabled
+        // Handle filter chip group selection
+        binding.filterChipGroup.setOnCheckedChangeListener { group, checkedId ->
             filterChats(binding.searchInput.text.toString())
         }
 
@@ -345,13 +343,20 @@ class MessagesActivity : AppCompatActivity() {
 
     private fun filterChats(query: String) {
         var filteredChats = if (query.isBlank()) {
-            chats
+            chats.toList()
         } else {
             chats.filter { it.name.contains(query, ignoreCase = true) }
         }
-        if (unreadFilterEnabled) {
-            filteredChats = filteredChats.filter { it.unreadCount > 0 }
+
+        when (binding.filterChipGroup.checkedChipId) {
+            R.id.chip_unread -> {
+                filteredChats = filteredChats.filter { it.unreadCount > 0 }
+            }
+            R.id.chip_groups -> {
+                filteredChats = filteredChats.filter { it.type == "group" }
+            }
         }
+
         Log.d("MessagesActivity", "Filtered chats count: ${filteredChats.size}")
         adapter.updateChats(filteredChats.sortedByDescending { it.lastMessageTimestamp?.toDate() })
     }

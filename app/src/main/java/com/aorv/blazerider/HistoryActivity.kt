@@ -1,15 +1,16 @@
 package com.aorv.blazerider
 
 import android.os.Bundle
-import android.view.MenuItem
+import android.util.Log
 import android.view.View
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
+import com.aorv.blazerider.databinding.ActivityHistoryBinding
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
-import com.aorv.blazerider.databinding.ActivityHistoryBinding
+import com.google.firebase.firestore.ktx.toObjects
 
 class HistoryActivity : AppCompatActivity() {
 
@@ -27,13 +28,11 @@ class HistoryActivity : AppCompatActivity() {
         setSupportActionBar(binding.toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
-        // Explicitly set the navigation click listener for the back button
         binding.toolbar.setNavigationOnClickListener {
             onBackPressedDispatcher.onBackPressed()
         }
-
         setupRecyclerView()
-        fetchRideHistory()
+        setupFirestoreListener()
     }
 
     private fun setupRecyclerView() {
@@ -44,29 +43,70 @@ class HistoryActivity : AppCompatActivity() {
         }
     }
 
-    private fun fetchRideHistory() {
-        val currentUserUid = auth.currentUser?.uid ?: return
+    private fun setupFirestoreListener() {
+        val currentUserUid = auth.currentUser?.uid
+        if (currentUserUid == null) {
+            Toast.makeText(this, "User not logged in.", Toast.LENGTH_SHORT).show()
+            binding.noHistoryText.text = "User not logged in."
+            binding.noHistoryText.visibility = View.VISIBLE
+            return
+        }
+
+        binding.progressBar.visibility = View.VISIBLE
 
         db.collection("users").document(currentUserUid).collection("rideHistory")
             .orderBy("datetime", Query.Direction.DESCENDING)
-            .get()
-            .addOnSuccessListener { documents ->
-                if (documents.isEmpty) {
+            .addSnapshotListener { snapshot, e ->
+                binding.progressBar.visibility = View.GONE
+
+                if (e != null) {
+                    Log.w("HistoryActivity", "Listen failed.", e)
+                    binding.noHistoryText.text = "Failed to load history."
                     binding.noHistoryText.visibility = View.VISIBLE
                     binding.historyRecyclerView.visibility = View.GONE
-                } else {
-                    binding.noHistoryText.visibility = View.GONE
-                    binding.historyRecyclerView.visibility = View.VISIBLE
+                    return@addSnapshotListener
+                }
+
+                if (snapshot != null && !snapshot.isEmpty) {
+                    val rides = snapshot.toObjects<RideHistory>()
                     historyList.clear()
-                    for (document in documents) {
-                        val history = document.toObject(RideHistory::class.java)
-                        historyList.add(history)
-                    }
+                    historyList.addAll(rides)
                     historyAdapter.notifyDataSetChanged()
+
+                    binding.historyRecyclerView.visibility = View.VISIBLE
+                    binding.noHistoryText.visibility = View.GONE
+                } else {
+                    historyList.clear()
+                    historyAdapter.notifyDataSetChanged()
+                    binding.historyRecyclerView.visibility = View.GONE
+                    binding.noHistoryText.visibility = View.VISIBLE
+                    Log.d("HistoryActivity", "Current data: null or empty")
                 }
             }
-            .addOnFailureListener { exception ->
-                // Handle error
+    }
+
+    private fun clearAllHistory() {
+        val currentUserUid = auth.currentUser?.uid ?: return
+        if (historyList.isEmpty()) {
+            Toast.makeText(this, "History is already empty.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val batch = db.batch()
+        val rideHistoryRef = db.collection("users").document(currentUserUid).collection("rideHistory")
+
+        for (ride in historyList) {
+            batch.delete(rideHistoryRef.document(ride.documentId))
+        }
+
+        batch.commit()
+            .addOnSuccessListener {
+                Log.d("HistoryActivity", "All history successfully deleted.")
+                Toast.makeText(this, "History cleared", Toast.LENGTH_SHORT).show()
+            }
+            .addOnFailureListener { e ->
+                Log.w("HistoryActivity", "Error deleting history.", e)
+                Toast.makeText(this, "Failed to clear history.", Toast.LENGTH_SHORT).show()
             }
     }
 }

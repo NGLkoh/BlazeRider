@@ -5,7 +5,7 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import com.aorv.blazerider.databinding.HistoryItemBinding
 
-class HistoryAdapter(private val historyList: List<RideHistory>) : RecyclerView.Adapter<HistoryAdapter.HistoryViewHolder>() {
+class HistoryAdapter(private val historyList: MutableList<RideHistory>) : RecyclerView.Adapter<HistoryAdapter.HistoryViewHolder>() {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): HistoryViewHolder {
         val binding = HistoryItemBinding.inflate(LayoutInflater.from(parent.context), parent, false)
@@ -18,6 +18,11 @@ class HistoryAdapter(private val historyList: List<RideHistory>) : RecyclerView.
     }
 
     override fun getItemCount(): Int = historyList.size
+
+    fun clear() {
+        historyList.clear()
+        notifyDataSetChanged()
+    }
 
     inner class HistoryViewHolder(private val binding: HistoryItemBinding) : RecyclerView.ViewHolder(binding.root) {
         fun bind(history: RideHistory) {
