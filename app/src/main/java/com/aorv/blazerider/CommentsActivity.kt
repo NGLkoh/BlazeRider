@@ -166,14 +166,46 @@ class CommentsActivity : AppCompatActivity() {
         )
 
         db.collection("posts").document(postId)
-            .collection("comments")
-            .add(comment)
-            .addOnSuccessListener {
-                db.collection("posts").document(postId).update("commentsCount", FieldValue.increment(1))
-                commentAdded = true
-                Toast.makeText(this@CommentsActivity, "Comment submitted", Toast.LENGTH_SHORT).show()
-            }.addOnFailureListener {
-                Toast.makeText(this@CommentsActivity, "Failed to submit comment", Toast.LENGTH_SHORT).show()
+            .get()
+            .addOnSuccessListener { postSnapshot ->
+                val postAuthorId = postSnapshot.getString("userId")
+
+                db.collection("posts").document(postId)
+                    .collection("comments")
+                    .add(comment)
+                    .addOnSuccessListener {
+                        db.collection("posts").document(postId).update("commentsCount", FieldValue.increment(1))
+                        commentAdded = true
+
+                        if (postAuthorId != null && postAuthorId != user.uid) {
+                            db.collection("users").document(user.uid).get()
+                                .addOnSuccessListener { userDoc ->
+                                    val firstName = userDoc.getString("firstName") ?: ""
+                                    val lastName = userDoc.getString("lastName") ?: ""
+                                    val commenterName = "$firstName $lastName".trim()
+
+                                    val notificationMessage = "$commenterName commented on your post"
+
+                                    val notification = com.aorv.blazerider.Notification(
+                                        actorId = user.uid,
+                                        entityId = postId,
+                                        entityType = "post",
+                                        message = notificationMessage,
+                                        type = "comment",
+                                        createdAt = com.google.firebase.Timestamp.now(),
+                                        isRead = false
+                                    )
+
+                                    db.collection("users").document(postAuthorId)
+                                        .collection("notifications")
+                                        .add(notification)
+                                }
+                        }
+
+                        Toast.makeText(this@CommentsActivity, "Comment submitted", Toast.LENGTH_SHORT).show()
+                    }.addOnFailureListener {
+                        Toast.makeText(this@CommentsActivity, "Failed to submit comment", Toast.LENGTH_SHORT).show()
+                    }
             }
     }
 

@@ -2,10 +2,16 @@ package com.aorv.blazerider
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
+import android.view.View
 import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.cardview.widget.CardView
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -17,45 +23,56 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 import android.util.Log
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import androidx.lifecycle.ViewModelProvider
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 
 class HomeActivity : AppCompatActivity() {
 
-    // Debounce variables
     private var lastClickTime: Long = 0
     private val debounceDelay: Long = 500 // 500ms debounce period
     private lateinit var auth: FirebaseAuth
+    private lateinit var db: FirebaseFirestore
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationViewModel: LocationViewModel
+
+    // Notification Banner
+    private lateinit var notificationBanner: CardView
+    private lateinit var notificationTitle: TextView
+    private lateinit var notificationMessage: TextView
+    private lateinit var notificationDismiss: ImageView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_home)
 
-        // Initialize Firebase and location services
         auth = FirebaseAuth.getInstance()
+        db = FirebaseFirestore.getInstance()
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         locationViewModel = ViewModelProvider(this)[LocationViewModel::class.java]
 
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_navigation)
+        notificationBanner = findViewById(R.id.notification_banner_card)
+        notificationTitle = findViewById(R.id.notification_title)
+        notificationMessage = findViewById(R.id.notification_message)
+        notificationDismiss = findViewById(R.id.notification_dismiss)
+
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = resources.getColor(R.color.red_orange, theme)
         WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = false
 
-        // Set default fragment to LocationFragment
         if (savedInstanceState == null) {
             replaceFragment(LocationFragment())
             bottomNav.selectedItemId = R.id.nav_location
         }
 
         bottomNav.setOnItemSelectedListener { item ->
-            // Debounce logic
             val currentTime = SystemClock.elapsedRealtime()
             if (currentTime - lastClickTime < debounceDelay) {
-                false // Ignore click if within debounce period
+                false
             } else {
                 lastClickTime = currentTime
                 when (item.itemId) {
@@ -84,10 +101,10 @@ class HomeActivity : AppCompatActivity() {
             }
         }
 
-        // Check and prompt for notification permission
         checkNotificationPermission()
+        listenForNotifications()
     }
-
+    
     override fun onResume() {
         super.onResume()
         // Set user status to online
@@ -175,7 +192,6 @@ class HomeActivity : AppCompatActivity() {
     private fun replaceFragment(fragment: Fragment) {
         val fragmentContainer = findViewById<FrameLayout>(R.id.fragment_container)
 
-        // Update status bar appearance and insets based on fragment
         if (fragment is LocationFragment || fragment is FeedFragment) {
             WindowCompat.setDecorFitsSystemWindows(window, false)
             window.statusBarColor = android.graphics.Color.TRANSPARENT
@@ -198,5 +214,47 @@ class HomeActivity : AppCompatActivity() {
         supportFragmentManager.beginTransaction()
             .replace(R.id.fragment_container, fragment)
             .commit()
+    }
+
+    private fun showNotificationBanner(title: String, message: String) {
+        notificationTitle.text = title
+        notificationMessage.text = message
+        notificationBanner.visibility = View.VISIBLE
+
+        notificationDismiss.setOnClickListener {
+            notificationBanner.visibility = View.GONE
+        }
+
+        Handler(Looper.getMainLooper()).postDelayed({
+            notificationBanner.visibility = View.GONE
+        }, 5000) // Hide after 5 seconds
+    }
+
+    private fun listenForNotifications() {
+        val userId = auth.currentUser?.uid ?: return
+
+        db.collection("users").document(userId).collection("notifications")
+            .orderBy("createdAt", Query.Direction.DESCENDING).limit(1)
+            .addSnapshotListener { snapshot, e ->
+                if (e != nil) {
+                    Log.w("HomeActivity", "Listen failed.", e)
+                    return@addSnapshotListener
+                }
+
+                if (snapshot != null && !snapshot.isEmpty) {
+                    val doc = snapshot.documents[0]
+                    val notification = doc.toObject(Notification::class.java)
+                    if (notification != null && !notification.isRead) {
+                        val title = when (notification.type) {
+                            "reaction" -> "New Reaction"
+                            "comment" -> "New Comment"
+                            else -> "New Notification"
+                        }
+                        showNotificationBanner(title, notification.message)
+                        // Mark as read to prevent showing again
+                        doc.reference.update("isRead", true)
+                    }
+                }
+            }
     }
 }

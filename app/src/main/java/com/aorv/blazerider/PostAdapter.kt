@@ -329,9 +329,34 @@ class PostAdapter(
             val userRef = db.collection("users").document(user.uid)
 
             db.runTransaction { transaction ->
-                val post = transaction.get(postRef)
-                val userDoc = transaction.get(userRef)
-                val reactionCount = post.get("reactionCount") as? Map<String, Long> ?: emptyMap()
+                val postSnapshot = transaction.get(postRef)
+                val postAuthorId = postSnapshot.getString("userId")
+
+                // Only send a notification if the person reacting is not the post author
+                if (postAuthorId != null && postAuthorId != user.uid) {
+                    val userDoc = transaction.get(userRef)
+                    val firstName = userDoc.getString("firstName") ?: ""
+                    val lastName = userDoc.getString("lastName") ?: ""
+                    val reactorName = "$firstName $lastName".trim()
+
+                    val notificationMessage = "$reactorName reacted $newReaction to your post"
+
+                    val notification = com.aorv.blazerider.Notification(
+                        actorId = user.uid,
+                        entityId = postId,
+                        entityType = "post",
+                        message = notificationMessage,
+                        type = "reaction",
+                        createdAt = com.google.firebase.Timestamp.now(),
+                        isRead = false
+                    )
+
+                    db.collection("users").document(postAuthorId)
+                        .collection("notifications")
+                        .add(notification)
+                }
+
+                val reactionCount = postSnapshot.get("reactionCount") as? Map<String, Long> ?: emptyMap()
                 val updatedCount = reactionCount.toMutableMap()
 
                 if (oldReaction != null && oldReaction != newReaction) {
@@ -342,6 +367,7 @@ class PostAdapter(
                 }
                 updatedCount[newReaction] = (updatedCount[newReaction] ?: 0L) + 1
 
+                val userDoc = transaction.get(userRef)
                 val firstName = userDoc.getString("firstName") ?: ""
                 val lastName = userDoc.getString("lastName") ?: ""
                 val userFullName = "$firstName $lastName".trim()
