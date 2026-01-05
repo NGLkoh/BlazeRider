@@ -14,6 +14,7 @@ import com.bumptech.glide.Glide
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.Timestamp
 import java.util.UUID
 
 class PhotoPreviewActivity : AppCompatActivity() {
@@ -102,7 +103,7 @@ class PhotoPreviewActivity : AppCompatActivity() {
     private fun sendPhotoMessage(photoUrl: String) {
         val currentUid = auth.currentUser?.uid ?: return
         val messageId = UUID.randomUUID().toString()
-        val timestamp = System.currentTimeMillis()
+        val timestamp = Timestamp.now()
 
         val messageData = hashMapOf(
             "senderId" to currentUid,
