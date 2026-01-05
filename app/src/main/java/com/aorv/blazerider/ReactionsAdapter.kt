@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
+import com.bumptech.glide.Glide
 
 class ReactionsAdapter(private val reactions: List<Reaction>) : RecyclerView.Adapter<ReactionsAdapter.ReactionViewHolder>() {
 
@@ -22,10 +23,15 @@ class ReactionsAdapter(private val reactions: List<Reaction>) : RecyclerView.Ada
 
     class ReactionViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val userFullName: TextView = itemView.findViewById(R.id.user_full_name)
+        private val profilePicture: ImageView = itemView.findViewById(R.id.profile_picture)
         private val reactionIcon: ImageView = itemView.findViewById(R.id.reaction_icon)
 
         fun bind(reaction: Reaction) {
             userFullName.text = reaction.userFullName
+            Glide.with(itemView.context)
+                .load(reaction.userProfilePictureUrl)
+                .into(profilePicture)
+
             val reactionType = reaction.reactionType
             val iconRes = when (reactionType) {
                 "like" -> R.drawable.ic_fb_like

@@ -216,9 +216,21 @@ class PostAdapter(
             reactionsRecyclerView.layoutManager = LinearLayoutManager(itemView.context)
 
             db.collection("posts").document(postId).collection("reactions").get()
-                .addOnSuccessListener {
-                    val reactions = it.toObjects(Reaction::class.java)
-                    reactionsRecyclerView.adapter = ReactionsAdapter(reactions)
+                .addOnSuccessListener { snapshot ->
+                    val reactions = mutableListOf<Reaction>()
+                    for (document in snapshot.documents) {
+                        val reaction = document.toObject(Reaction::class.java)
+                        if (reaction != null) {
+                            db.collection("users").document(reaction.userId).get()
+                                .addOnSuccessListener { userDoc ->
+                                    val profilePicUrl = userDoc.getString("profileImageUrl") ?: ""
+                                    reactions.add(reaction.copy(userProfilePictureUrl = profilePicUrl))
+                                    if (reactions.size == snapshot.documents.size) {
+                                        reactionsRecyclerView.adapter = ReactionsAdapter(reactions)
+                                    }
+                                }
+                        }
+                    }
                 }
 
             AlertDialog.Builder(itemView.context)
