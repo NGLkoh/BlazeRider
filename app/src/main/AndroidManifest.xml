@@ -111,9 +111,6 @@
             android:theme="@style/AppTheme"
             />
         <activity
-            android:name=".DisplayNotification"
-            android:theme="@style/Theme.Material3.DynamicColors.Light.NoActionBar" />
-        <activity
             android:name=".HistoryActivity"
             android:theme="@style/Theme.Material3.DynamicColors.Light.NoActionBar" />
         <meta-data
