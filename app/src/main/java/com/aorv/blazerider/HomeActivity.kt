@@ -7,9 +7,11 @@ import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
 import androidx.core.app.NotificationManagerCompat
@@ -17,6 +19,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.view.updateLayoutParams
 import androidx.fragment.app.Fragment
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -54,15 +57,35 @@ class HomeActivity : AppCompatActivity() {
         locationViewModel = ViewModelProvider(this)[LocationViewModel::class.java]
 
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_navigation)
-        notificationBanner = findViewById(R.id.notification_banner_card)
-        notificationTitle = findViewById(R.id.notification_title)
-        notificationMessage = findViewById(R.id.notification_message)
-        notificationDismiss = findViewById(R.id.notification_dismiss)
-
+        notificationBanner = findViewById(R.id.notification_banner)
+        notificationTitle = notificationBanner.findViewById(R.id.notification_title)
+        notificationMessage = notificationBanner.findViewById(R.id.notification_message)
+        notificationDismiss = notificationBanner.findViewById(R.id.notification_dismiss)
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        window.statusBarColor = resources.getColor(R.color.red_orange, theme)
-        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = false
+
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { view, windowInsets ->
+            val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+
+            // Apply insets to the notification banner
+            notificationBanner.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+                topMargin = insets.top
+            }
+
+            // Apply insets to the main container
+            val fragmentContainer = findViewById<FrameLayout>(R.id.fragment_container)
+            fragmentContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+                // This logic seems reversed, but it correctly handles the fragment padding
+                // when the status bar is transparent.
+                if (isStatusBarTransparent()) {
+                    topMargin = 0
+                } else {
+                    topMargin = insets.top
+                }
+            }
+
+            WindowInsetsCompat.CONSUMED
+        }
 
         if (savedInstanceState == null) {
             replaceFragment(LocationFragment())
@@ -100,6 +123,20 @@ class HomeActivity : AppCompatActivity() {
                 }
             }
         }
+
+        val onBackPressedCallback = object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                MaterialAlertDialogBuilder(this@HomeActivity)
+                    .setTitle("Exit")
+                    .setMessage("Are you sure you want to exit the app?")
+                    .setPositiveButton("Yes") { _, _ ->
+                        finishAffinity()
+                    }
+                    .setNegativeButton("No", null)
+                    .show()
+            }
+        }
+        onBackPressedDispatcher.addCallback(this, onBackPressedCallback)
 
         checkNotificationPermission()
         listenForNotifications()
@@ -154,17 +191,6 @@ class HomeActivity : AppCompatActivity() {
             }
     }
 
-    override fun onBackPressed() {
-        MaterialAlertDialogBuilder(this)
-            .setTitle("Exit")
-            .setMessage("Are you sure you want to exit the app?")
-            .setPositiveButton("Yes") { _, _ ->
-                finishAffinity()
-            }
-            .setNegativeButton("No", null)
-            .show()
-    }
-
     private fun checkNotificationPermission() {
         val sharedPreferences = getSharedPreferences("app_prefs", MODE_PRIVATE)
         val hasSeenPrompt = sharedPreferences.getBoolean("has_seen_notification_prompt", false)
@@ -189,26 +215,20 @@ class HomeActivity : AppCompatActivity() {
         }
     }
 
-    private fun replaceFragment(fragment: Fragment) {
-        val fragmentContainer = findViewById<FrameLayout>(R.id.fragment_container)
+    private fun isStatusBarTransparent(): Boolean {
+        val fragment = supportFragmentManager.findFragmentById(R.id.fragment_container)
+        return fragment is LocationFragment || fragment is FeedFragment
+    }
 
+    private fun replaceFragment(fragment: Fragment) {
         if (fragment is LocationFragment || fragment is FeedFragment) {
             WindowCompat.setDecorFitsSystemWindows(window, false)
             window.statusBarColor = android.graphics.Color.TRANSPARENT
             WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = true
-            ViewCompat.setOnApplyWindowInsetsListener(fragmentContainer) { v, insets ->
-                v.setPadding(0, 0, 0, 0)
-                insets
-            }
         } else {
             WindowCompat.setDecorFitsSystemWindows(window, false)
             window.statusBarColor = resources.getColor(R.color.red_orange, theme)
             WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = false
-            ViewCompat.setOnApplyWindowInsetsListener(fragmentContainer) { v, insets ->
-                val statusBarHeight = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
-                v.setPadding(0, statusBarHeight, 0, v.paddingBottom)
-                insets
-            }
         }
 
         supportFragmentManager.beginTransaction()
@@ -236,7 +256,7 @@ class HomeActivity : AppCompatActivity() {
         db.collection("users").document(userId).collection("notifications")
             .orderBy("createdAt", Query.Direction.DESCENDING).limit(1)
             .addSnapshotListener { snapshot, e ->
-                if (e != nil) {
+                if (e != null) {
                     Log.w("HomeActivity", "Listen failed.", e)
                     return@addSnapshotListener
                 }
@@ -248,6 +268,7 @@ class HomeActivity : AppCompatActivity() {
                         val title = when (notification.type) {
                             "reaction" -> "New Reaction"
                             "comment" -> "New Comment"
+                            "message" -> "New Message"
                             else -> "New Notification"
                         }
                         showNotificationBanner(title, notification.message)
