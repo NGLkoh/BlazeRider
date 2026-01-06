@@ -27,8 +27,8 @@ exports.sendChatNotification = onCall(async (request) => {
 
   const payload = {
     notification: {
-      title: `${senderName} in ${chatName || 'Chat'}`,
-      body: message,
+      title: chatName,
+      body: `${senderName}: ${message}`,
     },
     data: {
       chatId: chatId,
