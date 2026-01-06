@@ -1,145 +1,163 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/messages_root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@android:color/white">
+    android:layout_height="match_parent">
 
-    <!-- Toolbar -->
-    <androidx.appcompat.widget.Toolbar
-        android:id="@+id/toolbar"
-        android:layout_width="match_parent"
-        android:layout_height="94dp"
-        android:background="@color/red_orange"
-        android:paddingHorizontal="8dp"
-        android:paddingTop="32dp"
-        app:title="">
-
-        <!-- Back Button -->
-        <ImageButton
-            android:id="@+id/btn_back"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_chevron_left"
-            android:contentDescription="Back"
-            app:tint="@android:color/white" />
-
-        <!-- App Title and Logo -->
-        <TextView
-            android:id="@+id/app_title"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:fontFamily="@font/sunborn_regular"
-            android:text="Blaze Rider"
-            android:textColor="@android:color/white"
-            android:textSize="24sp"
-            android:layout_marginEnd="8dp"
-            android:layout_marginStart="8dp"/>
-
-        <ImageView
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:layout_marginStart="8dp"
-            android:src="@drawable/ic_blaze_rider"
-            android:layout_gravity="center" />
-
-        <!-- Compose Button -->
-        <ImageButton
-            android:id="@+id/btn_compose"
-            android:layout_width="36dp"
-            android:layout_marginEnd="18dp"
-        android:layout_height="36dp"
-        android:layout_gravity="end"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:src="@drawable/ic_compose"
-        android:contentDescription="Compose"
-        android:scaleType="fitCenter"
-        android:padding="4dp"
-        app:tint="@android:color/white" />
-
-    </androidx.appcompat.widget.Toolbar>
-
-    <!-- Search and Filter -->
     <LinearLayout
+        android:id="@+id/main_content"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
         android:orientation="vertical"
-        android:layout_margin="16dp">
+        android:background="@android:color/white">
 
-        <!-- Search Box -->
-        <LinearLayout
-            android:id="@+id/search_box"
+        <!-- Toolbar -->
+        <androidx.appcompat.widget.Toolbar
+            android:id="@+id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:paddingHorizontal="12dp"
-            android:background="@drawable/search_background"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:layout_height="94dp"
+            android:background="@color/red_orange"
+            android:paddingHorizontal="8dp"
+            android:paddingTop="32dp"
+            app:title="">
 
-            <EditText
-                android:id="@+id/search_input"
-                android:layout_width="0dp"
+            <!-- Back Button -->
+            <ImageButton
+                android:id="@+id/btn_back"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:background="@android:color/transparent"
-                android:hint="Search"
-                android:inputType="text"
-                android:textColor="@android:color/black"
-                android:textSize="16sp" />
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_chevron_left"
+                android:contentDescription="Back"
+                app:tint="@android:color/white" />
+
+            <!-- App Title and Logo -->
+            <TextView
+                android:id="@+id/app_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:fontFamily="@font/sunborn_regular"
+                android:text="Blaze Rider"
+                android:textColor="@android:color/white"
+                android:textSize="24sp"
+                android:layout_marginEnd="8dp"
+                android:layout_marginStart="8dp"/>
 
             <ImageView
-                android:id="@+id/search_icon"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_search"
-                android:contentDescription="Search" />
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="8dp"
+                android:src="@drawable/ic_blaze_rider"
+                android:layout_gravity="center" />
+
+            <!-- Compose Button -->
+            <ImageButton
+                android:id="@+id/btn_compose"
+                android:layout_width="36dp"
+                android:layout_marginEnd="18dp"
+                android:layout_height="36dp"
+                android:layout_gravity="end"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_compose"
+                android:contentDescription="Compose"
+                android:scaleType="fitCenter"
+                android:padding="4dp"
+                app:tint="@android:color/white" />
+
+        </androidx.appcompat.widget.Toolbar>
+
+        <!-- Search and Filter -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_margin="16dp">
+
+            <!-- Search Box -->
+            <LinearLayout
+                android:id="@+id/search_box"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:paddingHorizontal="12dp"
+                android:background="@drawable/search_background"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/search_input"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="@android:color/transparent"
+                    android:hint="Search"
+                    android:inputType="text"
+                    android:textColor="@android:color/black"
+                    android:textSize="16sp" />
+
+                <ImageView
+                    android:id="@+id/search_icon"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_search"
+                    android:contentDescription="Search" />
+            </LinearLayout>
+
+            <!-- Filter Chips -->
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/filter_chip_group"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="8dp"
+                app:chipSpacingHorizontal="8dp"
+                app:singleSelection="true">
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_all"
+                    style="@style/Widget.MaterialComponents.Chip.Choice"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:text="All" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_unread"
+                    style="@style/Widget.MaterialComponents.Chip.Choice"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Unread" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_groups"
+                    style="@style/Widget.MaterialComponents.Chip.Choice"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Groups" />
+            </com.google.android.material.chip.ChipGroup>
         </LinearLayout>
 
-        <!-- Filter Chips -->
-        <com.google.android.material.chip.ChipGroup
-            android:id="@+id/filter_chip_group"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginTop="8dp"
-            app:chipSpacingHorizontal="8dp"
-            app:singleSelection="true">
+        <!-- Messages RecyclerView -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/messages_recycler_view"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:paddingHorizontal="16dp"
+            android:clipToPadding="false" />
 
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chip_all"
-                style="@style/Widget.MaterialComponents.Chip.Choice"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:checked="true"
-                android:text="All" />
-
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chip_unread"
-                style="@style/Widget.MaterialComponents.Chip.Choice"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Unread" />
-
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chip_groups"
-                style="@style/Widget.MaterialComponents.Chip.Choice"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Groups" />
-        </com.google.android.material.chip.ChipGroup>
     </LinearLayout>
 
-    <!-- Messages RecyclerView -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/messages_recycler_view"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:paddingHorizontal="16dp"
-        android:clipToPadding="false" />
+    <!-- Notification Banner -->
+    <include
+        android:id="@+id/notification_banner"
+        layout="@layout/notification_banner"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
-</LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

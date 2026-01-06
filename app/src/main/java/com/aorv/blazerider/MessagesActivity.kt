@@ -5,9 +5,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
+import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -172,12 +175,7 @@ class MessagesActivity : AppCompatActivity() {
                 val chatId = intent.getStringExtra(MyFirebaseMessagingService.EXTRA_CHAT_ID)
                 val messageContent = intent.getStringExtra(MyFirebaseMessagingService.EXTRA_MESSAGE_CONTENT)
                 if (chatId != null && messageContent != null) {
-                    // Show an in-app notification (e.g., Toast)
-                    Toast.makeText(
-                        this@MessagesActivity,
-                        "New message in chat $chatId: $messageContent",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    showNotificationBanner("New Message", messageContent)
                     Log.d("MessagesActivity", "Received new message for chat: $chatId, content: $messageContent")
                     // Note: Firestore listener in fetchChats() updates the chat list
                 } else {
@@ -187,6 +185,21 @@ class MessagesActivity : AppCompatActivity() {
         }
         LocalBroadcastManager.getInstance(this)
             .registerReceiver(messageReceiver, IntentFilter(MyFirebaseMessagingService.NEW_MESSAGE_ACTION))
+    }
+
+    private fun showNotificationBanner(title: String, message: String) {
+        binding.notificationBanner.notificationTitle.text = title
+        binding.notificationBanner.notificationMessage.text = message
+        binding.notificationBanner.root.visibility = View.VISIBLE
+
+        binding.notificationBanner.notificationDismiss.setOnClickListener {
+            binding.notificationBanner.root.visibility = View.GONE
+        }
+
+        // Hide the banner after a delay
+        Handler(Looper.getMainLooper()).postDelayed({
+            binding.notificationBanner.root.visibility = View.GONE
+        }, 5000) // 5 seconds
     }
 
     private fun fetchChats() {
@@ -257,75 +270,45 @@ class MessagesActivity : AppCompatActivity() {
                                         Log.d("MessagesActivity", "Fetching user details for: $otherUserId")
                                         val userDoc = db.collection("users").document(otherUserId).get().await()
                                         if (userDoc.exists()) {
-                                            val firstName = userDoc.getString("firstName") ?: ""
-                                            val lastName = userDoc.getString("lastName") ?: ""
-                                            val profileImage = userDoc.getString("profileImageUrl")
-                                            val email = userDoc.getString("email") ?: ""
-                                            val lastActive = when (val value = userDoc.get("lastActive")) {
-                                                is Timestamp -> SimpleDateFormat(
-                                                    "yyyy-MM-dd HH:mm:ss",
-                                                    Locale.getDefault()
-                                                ).format(value.toDate())
-                                                is String -> value
-                                                else -> null
-                                            }
+                                            val firstName = userDoc.getString("firstName")
+                                            val lastName = userDoc.getString("lastName")
+                                            val profileImageUrl = userDoc.getString("profileImageUrl")
                                             val contact = Contact(
                                                 id = otherUserId,
-                                                firstName = firstName,
-                                                lastName = lastName,
-                                                profileImageUrl = profileImage,
-                                                email = email,
-                                                lastActive = lastActive
+                                                firstName = firstName ?: "",
+                                                lastName = lastName ?: "",
+                                                profileImageUrl = profileImageUrl,
+                                                email = null,
+                                                lastActive = null
                                             )
                                             chatMap[chatId] = Chat(
                                                 chatId = chatId,
-                                                name = "$firstName $lastName".trim().ifEmpty { "Unknown User" },
+                                                name = "${firstName ?: ""} ${lastName ?: ""}".trim(),
                                                 type = type,
-                                                lastMessage = userLastMessage.ifEmpty { "No messages yet" },
+                                                lastMessage = userLastMessage,
                                                 lastMessageTimestamp = userLastMessageTimestamp,
-                                                createdAt = document.getTimestamp("createdAt"),
-                                                profileImage = profileImage,
+                                                unreadCount = unreadCount,
                                                 contact = contact,
-                                                unreadCount = unreadCount
-                                            )
-                                            Log.d(
-                                                "MessagesActivity",
-                                                "Added p2p chat: $chatId with $firstName $lastName, Contact: $contact"
-                                            )
-                                        } else {
-                                            Log.w("MessagesActivity", "User document not found for: $otherUserId")
-                                            chatMap[chatId] = Chat(
-                                                chatId = chatId,
-                                                name = "Unknown User",
-                                                type = type,
-                                                lastMessage = userLastMessage.ifEmpty { "No messages yet" },
-                                                lastMessageTimestamp = userLastMessageTimestamp,
                                                 createdAt = document.getTimestamp("createdAt"),
-                                                profileImage = null,
-                                                contact = null,
-                                                unreadCount = unreadCount
+                                                profileImage = profileImageUrl
                                             )
-                                            Log.d("MessagesActivity", "Added p2p chat with unknown user: $chatId")
                                         }
-                                    } else {
-                                        Log.w("MessagesActivity", "No other user found for p2p chat: $chatId")
                                     }
                                 }
                                 "group" -> {
-                                    val name = document.getString("name") ?: "Unnamed Group"
-                                    val profileImage = document.getString("groupImage")
+                                    val groupName = document.getString("name")
+                                    val groupIconUrl = document.getString("iconUrl")
                                     chatMap[chatId] = Chat(
                                         chatId = chatId,
-                                        name = name,
+                                        name = groupName ?: "",
                                         type = type,
-                                        lastMessage = userLastMessage.ifEmpty { "No messages yet" },
+                                        lastMessage = userLastMessage,
                                         lastMessageTimestamp = userLastMessageTimestamp,
-                                        createdAt = document.getTimestamp("createdAt"),
-                                        profileImage = profileImage,
+                                        unreadCount = unreadCount,
                                         contact = null,
-                                        unreadCount = unreadCount
+                                        createdAt = document.getTimestamp("createdAt"),
+                                        profileImage = groupIconUrl
                                     )
-                                    Log.d("MessagesActivity", "Added group chat: $chatId with name: $name")
                                 }
                             }
                         } catch (e: Exception) {
@@ -334,35 +317,23 @@ class MessagesActivity : AppCompatActivity() {
                     }
 
                     chats.clear()
-                    chats.addAll(chatMap.values)
-                    Log.d("MessagesActivity", "Total chats loaded: ${chats.size}")
+                    chats.addAll(chatMap.values.sortedByDescending { it.lastMessageTimestamp })
+
+                    Log.d("MessagesActivity", "Final chat list size: ${chats.size}")
                     filterChats(binding.searchInput.text.toString())
                 }
             }
     }
 
     private fun filterChats(query: String) {
-        var filteredChats = if (query.isBlank()) {
-            chats.toList()
-        } else {
-            chats.filter { it.name.contains(query, ignoreCase = true) }
+        val filteredList = chats.filter { chat ->
+            chat.name.contains(query, ignoreCase = true)
         }
-
-        when (binding.filterChipGroup.checkedChipId) {
-            R.id.chip_unread -> {
-                filteredChats = filteredChats.filter { it.unreadCount > 0 }
-            }
-            R.id.chip_groups -> {
-                filteredChats = filteredChats.filter { it.type == "group" }
-            }
-        }
-
-        Log.d("MessagesActivity", "Filtered chats count: ${filteredChats.size}")
-        adapter.updateChats(filteredChats.sortedByDescending { it.lastMessageTimestamp?.toDate() })
+        adapter.updateChats(filteredList)
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        LocalBroadcastManager.getInstance(this).unregisterReceiver(messageReceiver)
+    private fun formatDate(timestamp: Timestamp): String {
+        val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
+        return sdf.format(timestamp.toDate())
     }
 }
