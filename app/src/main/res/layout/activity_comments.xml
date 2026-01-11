@@ -8,150 +8,161 @@
     android:background="@android:color/white"
     android:fitsSystemWindows="true">
 
-    <!-- App Bar with Toolbar -->
-    <androidx.appcompat.widget.Toolbar
-        android:id="@+id/comments_toolbar"
+    <!-- Main Content -->
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="94dp"
-        android:paddingTop="32dp"
-        android:background="@color/red_orange"
-        app:title="Comments"
-        app:titleTextColor="@android:color/white"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
+        <!-- App Bar with Toolbar -->
+        <androidx.appcompat.widget.Toolbar
+            android:id="@+id/comments_toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="94dp"
+            android:paddingTop="32dp"
+            android:background="@color/red_orange"
+            app:title="Comments"
+            app:titleTextColor="@android:color/white">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end|center_vertical"
+                android:orientation="horizontal"
+                android:layout_marginEnd="16dp">
+
+                <ImageButton
+                    android:id="@+id/comments_view_post_button"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:background="@android:color/transparent"
+                    android:src="@drawable/ic_history"
+                    android:contentDescription="View Post"
+                    app:tint="@color/white"
+                    android:scaleType="fitCenter"
+                    android:layout_marginEnd="16dp" />
+
+                <ImageButton
+                    android:id="@+id/comments_close_button"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:background="@android:color/transparent"
+                    android:src="@drawable/ic_close"
+                    android:contentDescription="Close"
+                    app:tint="@color/white"
+                    android:scaleType="fitCenter" />
+            </LinearLayout>
+        </androidx.appcompat.widget.Toolbar>
+
+        <!-- Comments List -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/comment_list"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_marginTop="8dp"
+            android:paddingHorizontal="8dp"
+            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+
+        <!-- No Comments Layout (Inside a FrameLayout to overlay correctly if needed, or just keep it simple) -->
+        <FrameLayout
+            android:id="@+id/no_comments_container"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/no_comments_layout"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:gravity="center">
+
+                <ImageView
+                    android:layout_width="100dp"
+                    android:layout_height="100dp"
+                    android:src="@drawable/ic_add_comment"
+                    android:contentDescription="Add comment icon" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="No comments found"
+                    android:textStyle="bold"
+                    android:textSize="16sp"
+                    android:layout_marginTop="8dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Be the first to comment"
+                    android:textSize="14sp"
+                    android:layout_marginTop="4dp" />
+            </LinearLayout>
+        </FrameLayout>
+
+        <!-- Comment Input -->
         <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="end|center_vertical"
-            android:orientation="horizontal"
-            android:layout_marginEnd="16dp">
-
-            <ImageButton
-                android:id="@+id/comments_view_post_button"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:background="@android:color/transparent"
-                android:src="@drawable/ic_history"
-                android:contentDescription="View Post"
-                app:tint="@color/white"
-                android:scaleType="fitCenter"
-                android:layout_marginEnd="16dp" />
-
-            <ImageButton
-                android:id="@+id/comments_close_button"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:background="@android:color/transparent"
-                android:src="@drawable/ic_close"
-                android:contentDescription="Close"
-                app:tint="@color/white"
-                android:scaleType="fitCenter" />
-        </LinearLayout>
-    </androidx.appcompat.widget.Toolbar>
-
-    <!-- Comments List -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/comment_list"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:layout_marginTop="8dp"
-        android:paddingHorizontal="8dp"
-        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-        app:layout_constraintTop_toBottomOf="@id/comments_toolbar"
-        app:layout_constraintBottom_toTopOf="@id/comment_input_container"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
-
-    <!-- No Comments Layout -->
-    <LinearLayout
-        android:id="@+id/no_comments_layout"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:orientation="vertical"
-        android:gravity="center_horizontal|center_vertical"
-        android:padding="16dp"
-        android:visibility="gone"
-        app:layout_constraintTop_toBottomOf="@id/comments_toolbar"
-        app:layout_constraintBottom_toTopOf="@id/comment_input_container"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
-
-        <ImageView
-            android:layout_width="100dp"
-            android:layout_height="100dp"
-            android:src="@drawable/ic_add_comment"
-            android:contentDescription="Add comment icon" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="No comments found"
-            android:textStyle="bold"
-            android:textSize="16sp"
-            android:layout_marginTop="8dp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Be the first to comment"
-            android:textSize="14sp"
-            android:layout_marginTop="4dp" />
-    </LinearLayout>
-
-    <!-- Comment Input -->
-    <LinearLayout
-        android:id="@+id/comment_input_container"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
-
-        <!-- Input Row -->
-        <LinearLayout
+            android:id="@+id/comment_input_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:orientation="vertical"
+            android:padding="16dp">
 
-            <com.google.android.material.imageview.ShapeableImageView
-                android:id="@+id/comment_profile_pic"
-                android:scaleType="fitCenter"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
-                android:contentDescription="User Image"
-                android:src="@drawable/ic_anonymous"
-                app:shapeAppearanceOverlay="@style/RoundedImage"
-                android:layout_marginEnd="8dp" />
-
-            <EditText
-                android:id="@+id/comment_input"
-                android:layout_width="0dp"
+            <!-- Input Row -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:hint="Write a comment..."
-                android:inputType="textMultiLine"
-                android:background="@drawable/rounded_border_background"
-                android:padding="10dp"
-                android:textSize="14sp" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
 
-            <ImageButton
-                android:id="@+id/comment_submit_button"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:scaleType="fitCenter"
-                android:background="@android:color/transparent"
-                android:contentDescription="Submit comment"
-                android:src="@drawable/ic_send"
-                app:tint="@color/teal_200"
-                android:enabled="false"
-                android:alpha="0.5"
-                android:layout_marginStart="8dp" />
+                <com.google.android.material.imageview.ShapeableImageView
+                    android:id="@+id/comment_profile_pic"
+                    android:scaleType="fitCenter"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:contentDescription="User Image"
+                    android:src="@drawable/ic_anonymous"
+                    app:shapeAppearanceOverlay="@style/RoundedImage"
+                    android:layout_marginEnd="8dp" />
+
+                <EditText
+                    android:id="@+id/comment_input"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="Write a comment..."
+                    android:inputType="textMultiLine"
+                    android:background="@drawable/rounded_border_background"
+                    android:padding="10dp"
+                    android:textSize="14sp" />
+
+                <ImageButton
+                    android:id="@+id/comment_submit_button"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:scaleType="fitCenter"
+                    android:background="@android:color/transparent"
+                    android:contentDescription="Submit comment"
+                    android:src="@drawable/ic_send"
+                    app:tint="@color/teal_200"
+                    android:enabled="false"
+                    android:alpha="0.5"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
+
+    <!-- Notification Banner -->
+    <include
+        android:id="@+id/notification_banner"
+        layout="@layout/notification_banner"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

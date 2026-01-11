@@ -1,199 +1,215 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:fitsSystemWindows="true"
-    android:background="#F5F5F5">
+    android:layout_height="match_parent">
 
-    <!-- Header -->
-    <androidx.appcompat.widget.Toolbar
-        android:id="@+id/toolbar"
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
-        android:background="#FFFFFF"
-        android:elevation="4dp">
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:fitsSystemWindows="true"
+        android:background="#F5F5F5">
 
-        <LinearLayout
+        <!-- Header -->
+        <androidx.appcompat.widget.Toolbar
+            android:id="@+id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:padding="8dp">
+            android:layout_height="?attr/actionBarSize"
+            android:background="#FFFFFF"
+            android:elevation="4dp">
 
-            <ImageButton
-                android:id="@+id/back_button"
-                android:layout_width="25dp"
-                android:layout_height="25dp"
-                android:src="@drawable/ic_back"
-                android:scaleType="fitCenter"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Back"
-                app:tint="@color/red_orange" />
-
-            <com.google.android.material.imageview.ShapeableImageView
-                android:id="@+id/user_image"
-                android:layout_width="25dp"
-                android:layout_height="25dp"
-                android:layout_marginStart="8dp"
-                android:src="@drawable/ic_anonymous"
-                android:scaleType="fitCenter"
-                app:shapeAppearanceOverlay="@style/RoundedImage" />
-
-            <TextView
-                android:id="@+id/user_name"
-                android:layout_width="0dp"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_gravity="center_vertical"
-                android:layout_marginStart="12dp"
-                android:text="User Name"
-                android:textColor="@android:color/black"
-                android:textSize="18sp"
-                android:textStyle="bold" />
+                android:orientation="horizontal"
+                android:padding="8dp">
 
-            <ImageButton
-                android:id="@+id/call_button"
-                android:layout_width="25dp"
-                android:layout_height="25dp"
-                android:src="@drawable/ic_call"
-                android:scaleType="fitCenter"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Call"
-                android:visibility="gone"
-                app:tint="@color/red_orange" />
+                <ImageButton
+                    android:id="@+id/back_button"
+                    android:layout_width="25dp"
+                    android:layout_height="25dp"
+                    android:src="@drawable/ic_back"
+                    android:scaleType="fitCenter"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Back"
+                    app:tint="@color/red_orange" />
 
-            <ImageButton
-                android:id="@+id/info_button"
-                android:layout_width="25dp"
-                android:layout_height="25dp"
-                android:src="@drawable/ic_info"
+                <com.google.android.material.imageview.ShapeableImageView
+                    android:id="@+id/user_image"
+                    android:layout_width="25dp"
+                    android:layout_height="25dp"
+                    android:layout_marginStart="8dp"
+                    android:src="@drawable/ic_anonymous"
+                    android:scaleType="fitCenter"
+                    app:shapeAppearanceOverlay="@style/RoundedImage" />
+
+                <TextView
+                    android:id="@+id/user_name"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginStart="12dp"
+                    android:text="User Name"
+                    android:textColor="@android:color/black"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <ImageButton
+                    android:id="@+id/call_button"
+                    android:layout_width="25dp"
+                    android:layout_height="25dp"
+                    android:src="@drawable/ic_call"
+                    android:scaleType="fitCenter"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Call"
+                    android:visibility="gone"
+                    app:tint="@color/red_orange" />
+
+                <ImageButton
+                    android:id="@+id/info_button"
+                    android:layout_width="25dp"
+                    android:layout_height="25dp"
+                    android:src="@drawable/ic_info"
+                    android:scaleType="fitCenter"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Chat Info"
+                    android:visibility="gone"
+                    app:tint="@color/red_orange" />
+
+            </LinearLayout>
+        </androidx.appcompat.widget.Toolbar>
+
+        <!-- Message List -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/messages_recycler_view"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:padding="8dp"
+            android:clipToPadding="false"
+            android:background="#FFFFFF"
+            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+            app:stackFromEnd="true" />
+
+        <!-- Typing Indicator -->
+        <LinearLayout
+            android:id="@+id/typing_indicator_container"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="start"
+            android:layout_marginStart="16dp"
+            android:layout_marginBottom="4dp"
+            android:background="@drawable/chat_bubble_received"
+            android:padding="12dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/typing_indicator"
+                android:layout_width="40dp"
+                android:layout_height="20dp"
                 android:scaleType="fitCenter"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Chat Info"
-                android:visibility="gone"
-                app:tint="@color/red_orange" />
+                android:contentDescription="Typing Indicator"
+                android:src="@drawable/typing_indicator" />
 
         </LinearLayout>
-    </androidx.appcompat.widget.Toolbar>
 
-    <!-- Message List -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/messages_recycler_view"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:padding="8dp"
-        android:clipToPadding="false"
-        android:background="#FFFFFF"
-        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-        app:stackFromEnd="true" />
+        <!-- Bottom Input Bar -->
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/input_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#FFFFFF"
+            android:padding="8dp"
+            android:elevation="4dp">
 
-    <!-- Typing Indicator -->
-    <LinearLayout
-        android:id="@+id/typing_indicator_container"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="start"
-        android:layout_marginStart="16dp"
-        android:layout_marginBottom="4dp"
-        android:background="@drawable/chat_bubble_received"
-        android:padding="12dp"
-        android:visibility="gone">
+            <ImageButton
+                android:id="@+id/file_button"
+                android:layout_width="25dp"
+                android:layout_height="25dp"
+                android:src="@drawable/ic_file"
+                android:scaleType="fitCenter"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Attach File"
+                app:tint="@color/red_orange"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent" />
 
-        <ImageView
-            android:id="@+id/typing_indicator"
-            android:layout_width="40dp"
-            android:layout_height="20dp"
-            android:scaleType="fitCenter"
-            android:contentDescription="Typing Indicator"
-            android:src="@drawable/typing_indicator" />
+            <ImageButton
+                android:id="@+id/camera_button"
+                android:layout_width="25dp"
+                android:layout_height="25dp"
+                android:src="@drawable/ic_camera"
+                android:scaleType="fitCenter"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Camera"
+                app:tint="@color/red_orange"
+                app:layout_constraintStart_toEndOf="@id/file_button"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                android:layout_marginStart="8dp" />
 
+            <ImageButton
+                android:id="@+id/gallery_button"
+                android:layout_width="25dp"
+                android:layout_height="25dp"
+                android:src="@drawable/ic_gallery"
+                android:scaleType="fitCenter"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Gallery"
+                app:tint="@color/red_orange"
+                app:layout_constraintStart_toEndOf="@id/camera_button"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                android:layout_marginStart="8dp" />
+
+            <EditText
+                android:id="@+id/message_input"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:hint="Message"
+                android:background="@drawable/rounded_input_background"
+                android:padding="12dp"
+                android:textSize="16sp"
+                android:inputType="textMultiLine"
+                android:maxLines="3"
+                android:scrollbars="vertical"
+                android:overScrollMode="always"
+                android:scrollbarStyle="insideInset"
+                app:layout_constraintStart_toEndOf="@id/gallery_button"
+                app:layout_constraintEnd_toStartOf="@+id/send_button"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp" />
+
+            <ImageButton
+                android:id="@+id/send_button"
+                android:layout_width="25dp"
+                android:layout_height="25dp"
+                android:src="@drawable/ic_send"
+                android:scaleType="fitCenter"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Send"
+                app:tint="@color/red_orange"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
     </LinearLayout>
 
-    <!-- Bottom Input Bar -->
-    <androidx.constraintlayout.widget.ConstraintLayout
-        android:id="@+id/input_container"
-        android:layout_width="match_parent"
+    <!-- Notification Banner -->
+    <include
+        android:id="@+id/notification_banner"
+        layout="@layout/notification_banner"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:background="#FFFFFF"
-        android:padding="8dp"
-        android:elevation="4dp">
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
-        <ImageButton
-            android:id="@+id/file_button"
-            android:layout_width="25dp"
-            android:layout_height="25dp"
-            android:src="@drawable/ic_file"
-            android:scaleType="fitCenter"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Attach File"
-            app:tint="@color/red_orange"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent" />
-
-        <ImageButton
-            android:id="@+id/camera_button"
-            android:layout_width="25dp"
-            android:layout_height="25dp"
-            android:src="@drawable/ic_camera"
-            android:scaleType="fitCenter"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Camera"
-            app:tint="@color/red_orange"
-            app:layout_constraintStart_toEndOf="@id/file_button"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            android:layout_marginStart="8dp" />
-
-        <ImageButton
-            android:id="@+id/gallery_button"
-            android:layout_width="25dp"
-            android:layout_height="25dp"
-            android:src="@drawable/ic_gallery"
-            android:scaleType="fitCenter"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Gallery"
-            app:tint="@color/red_orange"
-            app:layout_constraintStart_toEndOf="@id/camera_button"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            android:layout_marginStart="8dp" />
-
-        <EditText
-            android:id="@+id/message_input"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:hint="Message"
-            android:background="@drawable/rounded_input_background"
-            android:padding="12dp"
-            android:textSize="16sp"
-            android:inputType="textMultiLine"
-            android:maxLines="3"
-            android:scrollbars="vertical"
-            android:overScrollMode="always"
-            android:scrollbarStyle="insideInset"
-            app:layout_constraintStart_toEndOf="@id/gallery_button"
-            app:layout_constraintEnd_toStartOf="@+id/send_button"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp" />
-
-        <ImageButton
-            android:id="@+id/send_button"
-            android:layout_width="25dp"
-            android:layout_height="25dp"
-            android:src="@drawable/ic_send"
-            android:scaleType="fitCenter"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Send"
-            app:tint="@color/red_orange"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent" />
-
-    </androidx.constraintlayout.widget.ConstraintLayout>
-
-</LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

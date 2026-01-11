@@ -15,6 +15,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.FieldValue
 import java.util.UUID
 
 class PhotoPreviewActivity : AppCompatActivity() {
@@ -39,39 +40,24 @@ class PhotoPreviewActivity : AppCompatActivity() {
         closeButton = findViewById(R.id.close_button)
         loadingGif = findViewById(R.id.loading_gif)
 
-        // Get data from intent
         photoUri = Uri.parse(intent.getStringExtra("PHOTO_URI") ?: "")
         chatId = intent.getStringExtra("CHAT_ID")
 
-        // Load photo into ImageView
         Glide.with(this)
             .load(photoUri)
             .into(photoImageView)
 
-        // Close button
-        closeButton.setOnClickListener {
-            finish()
-        }
+        closeButton.setOnClickListener { finish() }
 
-        // Send button
-        sendButton.setOnClickListener {
-            uploadPhotoToFirebase()
-        }
+        sendButton.setOnClickListener { uploadPhotoToFirebase() }
     }
 
     private fun uploadPhotoToFirebase() {
         photoUri?.let { uri ->
-            // Update button state to show uploading
-            sendButton.text = "Uploading please wait..."
-            sendButton.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.darker_gray)
-            sendButton.isEnabled = false // Disable to prevent duplicate clicks
-
-            // Show and load animated GIF
+            sendButton.text = "Uploading..."
+            sendButton.isEnabled = false
             loadingGif.visibility = View.VISIBLE
-            Glide.with(this)
-                .asGif()
-                .load(R.drawable.ic_loading_gif)
-                .into(loadingGif)
+            Glide.with(this).asGif().load(R.drawable.ic_loading_gif).into(loadingGif)
 
             val storage = FirebaseStorage.getInstance()
             val photoRef = storage.reference.child("chat_photos/${chatId}/${UUID.randomUUID()}.jpg")
@@ -83,20 +69,9 @@ class PhotoPreviewActivity : AppCompatActivity() {
                 }
                 .addOnFailureListener { e ->
                     Log.e("PhotoPreview", "Failed to upload photo", e)
-                    Toast.makeText(this, "Failed to upload photo", Toast.LENGTH_SHORT).show()
-                    // Revert button state on failure
-                    sendButton.text = "Send"
-                    sendButton.backgroundTintList = ContextCompat.getColorStateList(this, R.color.red_orange)
-                    sendButton.isEnabled = true
-                    loadingGif.visibility = View.GONE
+                    Toast.makeText(this, "Upload failed", Toast.LENGTH_SHORT).show()
+                    resetUI()
                 }
-        } ?: run {
-            Toast.makeText(this, "No photo selected", Toast.LENGTH_SHORT).show()
-            // Revert button state if no URI
-            sendButton.text = "Send"
-            sendButton.backgroundTintList = ContextCompat.getColorStateList(this, R.color.red_orange)
-            sendButton.isEnabled = true
-            loadingGif.visibility = View.GONE
         }
     }
 
@@ -105,55 +80,73 @@ class PhotoPreviewActivity : AppCompatActivity() {
         val messageId = UUID.randomUUID().toString()
         val timestamp = Timestamp.now()
 
-        val messageData = hashMapOf(
-            "senderId" to currentUid,
-            "content" to photoUrl,
-            "timestamp" to timestamp,
-            "type" to "image",
-            "readBy" to listOf(currentUid)
+        val message = Message(
+            id = messageId,
+            senderId = currentUid,
+            content = photoUrl,
+            timestamp = timestamp,
+            type = "image",
+            status = "sent",
+            readBy = listOf(currentUid)
         )
 
-        db.collection("chats").document(chatId!!).collection("messages")
-            .document(messageId).set(messageData)
+        db.collection("chats").document(chatId!!).collection("messages").document(messageId).set(message)
             .addOnSuccessListener {
-                val lastMessage = hashMapOf(
-                    "content" to "Photo",
-                    "senderId" to currentUid,
-                    "timestamp" to timestamp
-                )
-                db.collection("chats").document(chatId!!)
-                    .update("lastMessage", lastMessage)
-
-                db.collection("chats").document(chatId!!).get()
-                    .addOnSuccessListener { document ->
-                        val members = document.get("members") as? Map<String, Map<String, Any>> ?: return@addOnSuccessListener
-                        members.keys.forEach { userId ->
-                            db.collection("userChats").document(userId)
-                                .collection("chats").document(chatId!!)
-                                .get()
-                                .addOnSuccessListener { userChatDoc ->
-                                    val currentUnreadCount = userChatDoc.getLong("unreadCount") ?: 0L
-                                    val updateData = hashMapOf(
-                                        "lastMessage" to lastMessage,
-                                        "unreadCount" to if (userId == currentUid) 0 else currentUnreadCount + 1
-                                    )
-                                    db.collection("userChats").document(userId)
-                                        .collection("chats").document(chatId!!)
-                                        .set(updateData)
-                                }
-                        }
-                    }
-                loadingGif.visibility = View.GONE
-                finish() // Close activity on success
+                updateLastMessageAndNotifications(photoUrl, currentUid, timestamp)
+                finish()
             }
             .addOnFailureListener { e ->
-                Log.e("PhotoPreview", "Failed to send photo message", e)
-                Toast.makeText(this, "Failed to send photo message", Toast.LENGTH_SHORT).show()
-                // Revert button state on failure
-                sendButton.text = "Send"
-                sendButton.backgroundTintList = ContextCompat.getColorStateList(this, R.color.red_orange)
-                sendButton.isEnabled = true
-                loadingGif.visibility = View.GONE
+                Log.e("PhotoPreview", "Failed to send message", e)
+                resetUI()
             }
+    }
+
+    private fun updateLastMessageAndNotifications(photoUrl: String, senderId: String, timestamp: Timestamp) {
+        val lastMessageData = mapOf(
+            "content" to "Photo",
+            "senderId" to senderId,
+            "timestamp" to timestamp
+        )
+
+        db.collection("chats").document(chatId!!).update("lastMessage", lastMessageData)
+
+        // Trigger notifications and update unread counts
+        db.collection("chats").document(chatId!!).get().addOnSuccessListener { chatDoc ->
+            val members = chatDoc.get("members") as? Map<String, Any> ?: return@addOnSuccessListener
+            val recipientIds = members.keys.filter { it != senderId }
+
+            members.keys.forEach { userId ->
+                val userChatRef = db.collection("userChats").document(userId).collection("chats").document(chatId!!)
+                db.runTransaction { transaction ->
+                    val snapshot = transaction.get(userChatRef)
+                    val newUnreadCount = if (userId == senderId) 0 else (snapshot.getLong("unreadCount") ?: 0) + 1
+                    transaction.update(userChatRef, mapOf("lastMessage" to lastMessageData, "unreadCount" to newUnreadCount))
+                }
+            }
+
+            // Create notification for recipients
+            db.collection("users").document(senderId).get().addOnSuccessListener { userDoc ->
+                val senderName = "${userDoc.getString("firstName")} ${userDoc.getString("lastName")}".trim()
+                recipientIds.forEach { recipientId ->
+                    val notification = hashMapOf(
+                        "actorId" to senderId,
+                        "entityId" to chatId,
+                        "entityType" to "chat",
+                        "message" to "$senderName sent a photo",
+                        "type" to "message",
+                        "createdAt" to FieldValue.serverTimestamp(),
+                        "isRead" to false,
+                        "metadata" to emptyMap<String, Any>()
+                    )
+                    db.collection("users").document(recipientId).collection("notifications").add(notification)
+                }
+            }
+        }
+    }
+
+    private fun resetUI() {
+        sendButton.text = "Send"
+        sendButton.isEnabled = true
+        loadingGif.visibility = View.GONE
     }
 }

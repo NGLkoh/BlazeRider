@@ -1,12 +1,10 @@
 package com.aorv.blazerider
 
-import android.content.BroadcastReceiver
-import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
@@ -14,7 +12,6 @@ import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -25,10 +22,11 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.DocumentChange
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import java.text.SimpleDateFormat
 import java.util.*
+import android.media.RingtoneManager
 
 class MessagesActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMessagesBinding
@@ -37,72 +35,55 @@ class MessagesActivity : AppCompatActivity() {
     private val chats = mutableListOf<Chat>()
     private val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
     private var chatListener: ListenerRegistration? = null
-    private lateinit var messageReceiver: BroadcastReceiver
+    private var bannerListener: ListenerRegistration? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMessagesBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Check if user is logged in
         if (currentUserId == null) {
-            Toast.makeText(this, "Please log in to view messages", Toast.LENGTH_SHORT).show()
             finish()
             return
         }
 
-        // Set up toolbar
         setSupportActionBar(binding.toolbar)
         supportActionBar?.setDisplayShowTitleEnabled(false)
 
-        // Handle back button click
-        binding.btnBack.setOnClickListener {
-            finish()
-        }
-
-        // Handle compose button click to launch NewChatActivity
+        binding.btnBack.setOnClickListener { finish() }
         binding.btnCompose.setOnClickListener {
             startActivity(Intent(this, NewChatActivity::class.java))
         }
 
-        // Set up RecyclerView
         adapter = ChatThreadAdapter { chat ->
             val intent = Intent(this, ChatConversationActivity::class.java)
             intent.putExtra("chatId", chat.chatId)
             if (chat.type == "p2p" && chat.contact != null) {
-                Log.d("MessagesActivity", "Passing contact to ChatConversationActivity: ${chat.contact}")
                 intent.putExtra("CONTACT", chat.contact)
-            } else if (chat.type == "p2p") {
-                Log.w("MessagesActivity", "No contact found for p2p chat: ${chat.chatId}")
             }
             startActivity(intent)
         }
         binding.messagesRecyclerView.layoutManager = LinearLayoutManager(this)
         binding.messagesRecyclerView.adapter = adapter
 
-        // Handle search input
         binding.searchInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                filterChats(s.toString())
-            }
+            override fun afterTextChanged(s: Editable?) { filterChats(s.toString()) }
         })
 
-        // Handle filter chip group selection
-        binding.filterChipGroup.setOnCheckedChangeListener { group, checkedId ->
+        binding.filterChipGroup.setOnCheckedChangeListener { _, _ ->
             filterChats(binding.searchInput.text.toString())
         }
 
-        // Set up local broadcast receiver for new messages
-        setupMessageReceiver()
+        setupSwipeToDelete()
+        listenForNotifications()
+    }
 
-        // Add swipe-to-delete functionality
+    private fun setupSwipeToDelete() {
         val itemTouchHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT) {
-            override fun onMove(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
-                return false // We don't want to handle move gestures
-            }
-
+            override fun onMove(rv: RecyclerView, vh: RecyclerView.ViewHolder, t: RecyclerView.ViewHolder) = false
             override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
                 val position = viewHolder.adapterPosition
                 val chat = adapter.getChatAt(position)
@@ -114,7 +95,7 @@ class MessagesActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        fetchChats()
+        startChatListener()
     }
 
     override fun onPause() {
@@ -122,228 +103,159 @@ class MessagesActivity : AppCompatActivity() {
         chatListener?.remove()
     }
 
-    private fun showDeleteConfirmationDialog(chat: Chat) {
-        MaterialAlertDialogBuilder(this)
-            .setTitle("Delete Chat")
-            .setMessage("Are you sure you want to delete this chat?")
-            .setNegativeButton("Cancel") { dialog, _ ->
-                adapter.notifyItemChanged(chats.indexOf(chat)) // Revert the swipe
-                dialog.dismiss()
-            }
-            .setPositiveButton("Delete") { _, _ ->
-                deleteChat(chat)
-            }
-            .show()
+    override fun onDestroy() {
+        super.onDestroy()
+        bannerListener?.remove()
+        mainHandler.removeCallbacksAndMessages(null)
     }
 
-    private fun deleteChat(chat: Chat) {
-        if (currentUserId == null) return
-
-        lifecycleScope.launch {
-            try {
-                // Remove the current user from the chat's members list
-                db.collection("chats").document(chat.chatId)
-                    .update("members.$currentUserId", null)
-                    .await()
-
-                // Remove the chat from the user's chat list
-                db.collection("userChats").document(currentUserId)
-                    .collection("chats").document(chat.chatId)
-                    .delete()
-                    .await()
-
-                // Remove the chat from the local list and update the adapter
-                val index = chats.indexOf(chat)
-                if (index != -1) {
-                    chats.removeAt(index)
-                    adapter.updateChats(chats)
-                }
-
-                Toast.makeText(this@MessagesActivity, "Chat deleted", Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
-                Log.e("MessagesActivity", "Error deleting chat: ${e.message}", e)
-                Toast.makeText(this@MessagesActivity, "Failed to delete chat", Toast.LENGTH_SHORT).show()
-                // If deletion fails, revert the UI change
-                adapter.notifyItemChanged(chats.indexOf(chat))
-            }
-        }
-    }
-
-    private fun setupMessageReceiver() {
-        messageReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                val chatId = intent.getStringExtra(MyFirebaseMessagingService.EXTRA_CHAT_ID)
-                val messageContent = intent.getStringExtra(MyFirebaseMessagingService.EXTRA_MESSAGE_CONTENT)
-                if (chatId != null && messageContent != null) {
-                    showNotificationBanner("New Message", messageContent)
-                    Log.d("MessagesActivity", "Received new message for chat: $chatId, content: $messageContent")
-                    // Note: Firestore listener in fetchChats() updates the chat list
-                } else {
-                    Log.w("MessagesActivity", "Invalid broadcast data: chatId=$chatId, messageContent=$messageContent")
-                }
-            }
-        }
-        LocalBroadcastManager.getInstance(this)
-            .registerReceiver(messageReceiver, IntentFilter(MyFirebaseMessagingService.NEW_MESSAGE_ACTION))
-    }
-
-    private fun showNotificationBanner(title: String, message: String) {
-        binding.notificationBanner.notificationTitle.text = title
-        binding.notificationBanner.notificationMessage.text = message
-        binding.notificationBanner.root.visibility = View.VISIBLE
-
-        binding.notificationBanner.notificationDismiss.setOnClickListener {
-            binding.notificationBanner.root.visibility = View.GONE
-        }
-
-        // Hide the banner after a delay
-        Handler(Looper.getMainLooper()).postDelayed({
-            binding.notificationBanner.root.visibility = View.GONE
-        }, 5000) // 5 seconds
-    }
-
-    private fun fetchChats() {
-        if (currentUserId == null) {
-            Log.e("MessagesActivity", "Current user ID is null")
-            return
-        }
-
-        Log.d("MessagesActivity", "Fetching chats for user: $currentUserId")
-
-        chatListener = db.collection("chats")
-            .whereNotEqualTo("members.$currentUserId", null)
+    private fun startChatListener() {
+        val userId = currentUserId ?: return
+        
+        chatListener = db.collection("userChats").document(userId).collection("chats")
             .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    Toast.makeText(this, "Failed to load chats: ${error.message}", Toast.LENGTH_SHORT).show()
-                    Log.e("MessagesActivity", "Firestore error: ${error.message}", error)
-                    return@addSnapshotListener
-                }
-
-                if (snapshot == null || snapshot.isEmpty) {
-                    Log.d("MessagesActivity", "No chats found for user: $currentUserId")
-                    chats.clear()
-                    adapter.updateChats(chats)
-                    return@addSnapshotListener
-                }
-
-                Log.d("MessagesActivity", "Found ${snapshot.documents.size} chat documents")
+                if (error != null) return@addSnapshotListener
+                if (snapshot == null) return@addSnapshotListener
 
                 lifecycleScope.launch {
-                    val chatMap = mutableMapOf<String, Chat>()
+                    val updatedChats = mutableListOf<Chat>()
+                    
+                    for (doc in snapshot.documents) {
+                        val chatId = doc.id
+                        val unreadCount = doc.getLong("unreadCount")?.toInt() ?: 0
+                        val lastMessageMap = doc.get("lastMessage") as? Map<*, *>
+                        
+                        val chatDoc = db.collection("chats").document(chatId).get().await()
+                        if (!chatDoc.exists()) continue
 
-                    snapshot.documents.forEach { document ->
-                        try {
-                            val chatId = document.id
-                            if (chatMap.containsKey(chatId)) {
-                                Log.d("MessagesActivity", "Skipping duplicate chat: $chatId")
-                                return@forEach
-                            }
+                        val type = chatDoc.getString("type") ?: "group"
+                        val createdAt = chatDoc.getTimestamp("createdAt")
+                        val lastMessage = lastMessageMap?.get("content") as? String ?: ""
+                        val timestamp = lastMessageMap?.get("timestamp") as? Timestamp ?: createdAt ?: Timestamp.now()
 
-                            val type = document.getString("type") ?: "group"
-                            val lastMessageMap = document.get("lastMessage") as? Map<*, *>
-                            val lastMessage = lastMessageMap?.get("content") as? String ?: ""
-                            val lastMessageTimestamp = lastMessageMap?.get("timestamp") as? Timestamp
-                                ?: document.getTimestamp("createdAt") ?: Timestamp.now()
+                        var chatName = ""
+                        var profileImage = ""
+                        var contact: Contact? = null
 
-                            Log.d("MessagesActivity", "Processing chat: $chatId, Type: $type")
-
-                            val userChatDoc = db.collection("userChats")
-                                .document(currentUserId)
-                                .collection("chats")
-                                .document(chatId)
-                                .get()
-                                .await()
-                            val userLastMessageMap = userChatDoc.get("lastMessage") as? Map<*, *>
-                            val userLastMessage = (userLastMessageMap?.get("content") as? String)?.takeIf { it.isNotEmpty() } ?: lastMessage
-                            val userLastMessageTimestamp = userLastMessageMap?.get("timestamp") as? Timestamp
-                                ?: lastMessageTimestamp
-
-                            val unreadCount = userChatDoc.getLong("unreadCount")?.toInt() ?: 0
-
-                            when (type) {
-                                "p2p" -> {
-                                    val members = document.get("members") as? Map<String, Any> ?: emptyMap()
-                                    Log.d("MessagesActivity", "Members: $members")
-                                    val otherUserId = members.keys.firstOrNull { it != currentUserId }
-                                    Log.d("MessagesActivity", "Other user ID: $otherUserId")
-                                    if (otherUserId != null) {
-                                        Log.d("MessagesActivity", "Fetching user details for: $otherUserId")
-                                        val userDoc = db.collection("users").document(otherUserId).get().await()
-                                        if (userDoc.exists()) {
-                                            val firstName = userDoc.getString("firstName")
-                                            val lastName = userDoc.getString("lastName")
-                                            val profileImageUrl = userDoc.getString("profileImageUrl")
-                                            val contact = Contact(
-                                                id = otherUserId,
-                                                firstName = firstName ?: "",
-                                                lastName = lastName ?: "",
-                                                profileImageUrl = profileImageUrl,
-                                                email = null,
-                                                lastActive = null
-                                            )
-                                            chatMap[chatId] = Chat(
-                                                chatId = chatId,
-                                                name = "${firstName ?: ""} ${lastName ?: ""}".trim(),
-                                                type = type,
-                                                lastMessage = userLastMessage,
-                                                lastMessageTimestamp = userLastMessageTimestamp,
-                                                unreadCount = unreadCount,
-                                                contact = contact,
-                                                createdAt = document.getTimestamp("createdAt"),
-                                                profileImage = profileImageUrl
-                                            )
-                                        }
-                                    }
-                                }
-                                "group" -> {
-                                    val groupName = document.getString("name")
-                                    val groupIconUrl = document.getString("iconUrl")
-                                    chatMap[chatId] = Chat(
-                                        chatId = chatId,
-                                        name = groupName ?: "",
-                                        type = type,
-                                        lastMessage = userLastMessage,
-                                        lastMessageTimestamp = userLastMessageTimestamp,
-                                        unreadCount = unreadCount,
-                                        contact = null,
-                                        createdAt = document.getTimestamp("createdAt"),
-                                        profileImage = groupIconUrl
-                                    )
+                        if (type == "p2p") {
+                            val members = chatDoc.get("members") as? Map<String, Any> ?: emptyMap()
+                            val otherUserId = members.keys.firstOrNull { it != userId }
+                            if (otherUserId != null) {
+                                val userDoc = db.collection("users").document(otherUserId).get().await()
+                                if (userDoc.exists()) {
+                                    chatName = "${userDoc.getString("firstName")} ${userDoc.getString("lastName")}".trim()
+                                    profileImage = userDoc.getString("profileImageUrl") ?: ""
+                                    contact = Contact(otherUserId, userDoc.getString("firstName") ?: "", userDoc.getString("lastName") ?: "", profileImage)
                                 }
                             }
-                        } catch (e: Exception) {
-                            Log.e("MessagesActivity", "Error processing chat document: ${document.id}", e)
+                        } else {
+                            chatName = chatDoc.getString("name") ?: "Group Chat"
+                            profileImage = chatDoc.getString("groupImage") ?: ""
                         }
+
+                        updatedChats.add(Chat(
+                            chatId = chatId,
+                            name = chatName,
+                            type = type,
+                            lastMessage = lastMessage,
+                            lastMessageTimestamp = timestamp,
+                            createdAt = createdAt,
+                            profileImage = profileImage,
+                            contact = contact,
+                            unreadCount = unreadCount
+                        ))
                     }
 
                     chats.clear()
-                    chats.addAll(chatMap.values.sortedByDescending { it.lastMessageTimestamp })
-
-                    Log.d("MessagesActivity", "Final chat list size: ${chats.size}")
+                    chats.addAll(updatedChats.sortedByDescending { it.lastMessageTimestamp })
                     filterChats(binding.searchInput.text.toString())
                 }
             }
     }
 
+    private fun listenForNotifications() {
+        val userId = currentUserId ?: return
+        bannerListener = db.collection("userChats").document(userId).collection("chats")
+            .addSnapshotListener { snapshot, e ->
+                if (e != null || snapshot == null) return@addSnapshotListener
+                for (dc in snapshot.documentChanges) {
+                    if (dc.type == DocumentChange.Type.MODIFIED) {
+                        val unreadCount = dc.document.getLong("unreadCount") ?: 0
+                        val lastMessageMap = dc.document.get("lastMessage") as? Map<*, *>
+                        val senderId = lastMessageMap?.get("senderId") as? String
+                        
+                        if (unreadCount > 0 && senderId != userId) {
+                            db.collection("users").document(senderId!!).get().addOnSuccessListener { userDoc ->
+                                val name = "${userDoc.getString("firstName")} ${userDoc.getString("lastName")}".trim()
+                                showNotificationBanner(name, lastMessageMap["content"] as? String ?: "New message")
+                            }
+                        }
+                    }
+                }
+            }
+    }
+
+    private fun playNotificationSound() {
+        try {
+            val notification = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val r = RingtoneManager.getRingtone(applicationContext, notification)
+            r.play()
+        } catch (e: Exception) {}
+    }
+
+    private fun showNotificationBanner(senderName: String, message: String) {
+        mainHandler.post {
+            if (isFinishing || isDestroyed) return@post
+            playNotificationSound()
+            binding.notificationBanner.notificationTitle.text = "New Message"
+            binding.notificationBanner.notificationMessage.text = "$senderName: $message"
+            binding.notificationBanner.root.visibility = View.VISIBLE
+            
+            binding.notificationBanner.root.setOnClickListener {
+                binding.notificationBanner.root.visibility = View.GONE
+            }
+
+            binding.notificationBanner.notificationDismiss.setOnClickListener {
+                binding.notificationBanner.root.visibility = View.GONE
+            }
+
+            mainHandler.removeCallbacksAndMessages("banner_timeout")
+            mainHandler.postDelayed({
+                binding.notificationBanner.root.visibility = View.GONE
+            }, "banner_timeout", 5000)
+        }
+    }
+
     private fun filterChats(query: String) {
-        var filteredList = chats.filter { chat ->
-            chat.name.contains(query, ignoreCase = true)
-        }
-
+        var filteredList = chats.filter { it.name.contains(query, ignoreCase = true) }
         when (binding.filterChipGroup.checkedChipId) {
-            R.id.chip_unread -> {
-                filteredList = filteredList.filter { it.unreadCount > 0 }
-            }
-            R.id.chip_groups -> {
-                filteredList = filteredList.filter { it.type == "group" }
-            }
+            R.id.chip_unread -> filteredList = filteredList.filter { it.unreadCount > 0 }
+            R.id.chip_groups -> filteredList = filteredList.filter { it.type == "group" }
         }
-
         adapter.updateChats(filteredList)
     }
 
-    private fun formatDate(timestamp: Timestamp): String {
-        val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
-        return sdf.format(timestamp.toDate())
+    private fun showDeleteConfirmationDialog(chat: Chat) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Delete Chat")
+            .setMessage("Are you sure you want to delete this chat?")
+            .setNegativeButton("Cancel") { dialog, _ ->
+                adapter.notifyDataSetChanged()
+                dialog.dismiss()
+            }
+            .setPositiveButton("Delete") { _, _ -> deleteChat(chat) }
+            .show()
+    }
+
+    private fun deleteChat(chat: Chat) {
+        lifecycleScope.launch {
+            try {
+                db.collection("userChats").document(currentUserId!!).collection("chats").document(chat.chatId).delete().await()
+                chats.remove(chat)
+                adapter.updateChats(chats)
+            } catch (e: Exception) {
+                adapter.notifyDataSetChanged()
+            }
+        }
     }
 }

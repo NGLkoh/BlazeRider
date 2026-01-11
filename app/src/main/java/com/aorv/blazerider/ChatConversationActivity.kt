@@ -11,6 +11,7 @@ import android.provider.MediaStore
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
+import android.view.View
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -40,6 +41,11 @@ import java.text.SimpleDateFormat
 import java.util.*
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.Query
+import androidx.cardview.widget.CardView
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 
 class ChatConversationActivity : AppCompatActivity() {
     private lateinit var binding: ActivityChatConversationBinding
@@ -57,6 +63,8 @@ class ChatConversationActivity : AppCompatActivity() {
     private lateinit var messageAdapter: MessageAdapter
     private var messageListener: ListenerRegistration? = null
     private var typingListener: ListenerRegistration? = null
+    private var notificationsListener: ListenerRegistration? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var chatId: String? = null
     private val PICK_FILE_REQUEST = 1001
     private val CAPTURE_IMAGE_REQUEST = 1002
@@ -66,6 +74,12 @@ class ChatConversationActivity : AppCompatActivity() {
     private val CAMERA_PERMISSION_REQUEST = 1005
     private val GALLERY_PERMISSION_REQUEST = 1006
     private var isTyping = false
+
+    // Notification Banner
+    private lateinit var notificationBanner: CardView
+    private lateinit var notificationTitleBanner: TextView
+    private lateinit var notificationMessageBanner: TextView
+    private lateinit var notificationDismissBanner: ImageView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -107,6 +121,12 @@ class ChatConversationActivity : AppCompatActivity() {
         val fileButton = findViewById<ImageButton>(R.id.file_button)
         val cameraButton = findViewById<ImageButton>(R.id.camera_button)
         val galleryButton = findViewById<ImageButton>(R.id.gallery_button)
+
+        // Banner setup
+        notificationBanner = findViewById(R.id.notification_banner)
+        notificationTitleBanner = notificationBanner.findViewById(R.id.notification_title)
+        notificationMessageBanner = notificationBanner.findViewById(R.id.notification_message)
+        notificationDismissBanner = notificationBanner.findViewById(R.id.notification_dismiss)
 
         Glide.with(this)
             .asGif()
@@ -162,12 +182,14 @@ class ChatConversationActivity : AppCompatActivity() {
                 .error(R.drawable.ic_anonymous)
                 .into(userImageView)
             if (chatId != null) {
+                markChatAsRead()
                 listenForMessages(chatId!!)
                 listenForTypingStatus(chatId!!, currentUid, fullName)
             } else {
                 findOrCreateP2PChat(contact.id)
             }
         } else if (chatId != null) {
+            markChatAsRead()
             loadChatDetails(chatId!!)
             listenForMessages(chatId!!)
             listenForTypingStatus(chatId!!, currentUid, "Group Chat")
@@ -175,6 +197,96 @@ class ChatConversationActivity : AppCompatActivity() {
             Log.e("ChatConversationActivity", "No contact or chatId provided")
             Toast.makeText(this, "Error: No contact or chat selected", Toast.LENGTH_SHORT).show()
             finish()
+        }
+
+        listenForNotifications()
+    }
+
+    private fun markChatAsRead() {
+        val currentUid = auth.currentUser?.uid ?: return
+        val id = chatId ?: return
+
+        db.collection("userChats").document(currentUid)
+            .collection("chats").document(id)
+            .update("unreadCount", 0)
+            .addOnFailureListener { e ->
+                Log.e("ChatConversation", "Failed to reset unreadCount", e)
+            }
+    }
+
+    private fun listenForNotifications() {
+        val userId = auth.currentUser?.uid ?: return
+        val prefs = getSharedPreferences("shown_notifications", MODE_PRIVATE)
+
+        notificationsListener = db.collection("users").document(userId).collection("notifications")
+            .orderBy("createdAt", Query.Direction.DESCENDING).limit(1)
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) return@addSnapshotListener
+                if (snapshot != null && snapshot.metadata.hasPendingWrites()) return@addSnapshotListener
+
+                if (snapshot != null && !snapshot.isEmpty) {
+                    val doc = snapshot.documents[0]
+                    val notificationId = doc.id
+                    val type = doc.getString("type")
+                    val entityId = doc.getString("entityId")
+                    
+                    // Don't show notification for the chat we are currently in
+                    if (type == "message" && entityId == chatId) return@addSnapshotListener
+
+                    if (!doc.getBoolean("isRead")!! && !prefs.getBoolean(notificationId, false)) {
+                        val title = when (type) {
+                            "reaction" -> "New Reaction"
+                            "comment" -> "New Comment"
+                            "message" -> "New Message"
+                            else -> "New Notification"
+                        }
+                        val message = doc.getString("message") ?: ""
+                        showNotificationBanner(title, message, notificationId, type, entityId)
+                        prefs.edit().putBoolean(notificationId, true).apply()
+                    }
+                }
+            }
+    }
+
+    private fun showNotificationBanner(title: String, message: String, notificationId: String, type: String?, entityId: String?) {
+        mainHandler.post {
+            if (isFinishing || isDestroyed) return@post
+            notificationTitleBanner.text = title
+            notificationMessageBanner.text = message
+            notificationBanner.visibility = View.VISIBLE
+
+            notificationBanner.setOnClickListener {
+                val userId = auth.currentUser?.uid
+                if (userId != null) {
+                    db.collection("users").document(userId)
+                        .collection("notifications").document(notificationId)
+                        .update("isRead", true)
+                }
+
+                when (type) {
+                    "reaction" -> {
+                        val intent = Intent(this, SinglePostActivity::class.java).apply { putExtra("POST_ID", entityId) }
+                        startActivity(intent)
+                    }
+                    "comment" -> {
+                        val intent = Intent(this, CommentsActivity::class.java).apply { putExtra("POST_ID", entityId) }
+                        startActivity(intent)
+                    }
+                    "message" -> {
+                        if (entityId != chatId) {
+                            val intent = Intent(this, ChatConversationActivity::class.java).apply { putExtra("chatId", entityId) }
+                            startActivity(intent)
+                        }
+                    }
+                }
+                notificationBanner.visibility = View.GONE
+            }
+
+            notificationDismissBanner.setOnClickListener { notificationBanner.visibility = View.GONE }
+            mainHandler.removeCallbacksAndMessages("banner_timeout")
+            mainHandler.postAtTime({
+                if (!isFinishing && !isDestroyed) notificationBanner.visibility = View.GONE
+            }, "banner_timeout", SystemClock.uptimeMillis() + 5000)
         }
     }
 
@@ -186,6 +298,7 @@ class ChatConversationActivity : AppCompatActivity() {
             .addOnSuccessListener { document ->
                 if (document.exists()) {
                     chatId = potentialChatId
+                    markChatAsRead()
                     listenForMessages(chatId!!)
                     listenForTypingStatus(chatId!!, currentUid, userNameTextView.text.toString())
                 } else {
@@ -404,7 +517,7 @@ class ChatConversationActivity : AppCompatActivity() {
                         "actorId" to currentUid,
                         "entityId" to chatId,
                         "entityType" to "chat",
-                        "message" to "$senderName sent you a message: $content",
+                        "message" to "$senderName: $content",
                         "type" to "message",
                         "createdAt" to FieldValue.serverTimestamp(),
                         "isRead" to false,
@@ -503,10 +616,15 @@ class ChatConversationActivity : AppCompatActivity() {
                 if (e != null) {
                     return@addSnapshotListener
                 }
+                
+                // Reset unreadCount whenever new messages are received while the user is in the chat
+                if (snapshot != null && !snapshot.isEmpty) {
+                    markChatAsRead()
+                }
+
                 snapshot?.let {
                     val messages = it.documents.mapNotNull { doc ->
                         val message = doc.toObject(Message::class.java)?.copy(id = doc.id)
-                        // Additional logic for dividers can go here
                         message
                     }
                     messageAdapter.submitList(messages)
@@ -519,5 +637,7 @@ class ChatConversationActivity : AppCompatActivity() {
         super.onDestroy()
         messageListener?.remove()
         typingListener?.remove()
+        notificationsListener?.remove()
+        mainHandler.removeCallbacksAndMessages(null)
     }
 }

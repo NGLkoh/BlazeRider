@@ -1,6 +1,7 @@
 package com.aorv.blazerider
 
 import android.content.Intent
+import android.media.RingtoneManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -33,6 +34,7 @@ import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.DocumentChange
 import java.util.Date
 
 class HomeActivity : AppCompatActivity() {
@@ -45,6 +47,7 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var locationViewModel: LocationViewModel
     private var announcementsListener: ListenerRegistration? = null
     private var notificationsListener: ListenerRegistration? = null
+    private var messageListener: ListenerRegistration? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     // Notification Banner
@@ -73,12 +76,10 @@ class HomeActivity : AppCompatActivity() {
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { view, windowInsets ->
             val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
 
-            // Apply insets to the notification banner
             notificationBanner.updateLayoutParams<ViewGroup.MarginLayoutParams> {
                 topMargin = insets.top
             }
 
-            // Apply insets to the main container
             val fragmentContainer = findViewById<FrameLayout>(R.id.fragment_container)
             fragmentContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> {
                 if (isStatusBarTransparent()) {
@@ -103,50 +104,141 @@ class HomeActivity : AppCompatActivity() {
             } else {
                 lastClickTime = currentTime
                 when (item.itemId) {
-                    R.id.nav_location -> {
-                        replaceFragment(LocationFragment())
-                        true
-                    }
+                    R.id.nav_location -> { replaceFragment(LocationFragment()); true }
                     R.id.nav_announcements -> {
                         replaceFragment(AnnouncementsFragment())
                         updateLastReadAnnouncement()
                         bottomNav.removeBadge(R.id.nav_announcements)
                         true
                     }
-                    R.id.nav_home -> {
-                        replaceFragment(FeedFragment())
-                        true
-                    }
+                    R.id.nav_home -> { replaceFragment(FeedFragment()); true }
                     R.id.nav_shared_rides -> {
                         startActivity(Intent(this, SharedRidesActivity::class.java))
                         true
                     }
-                    R.id.nav_hamburger -> {
-                        replaceFragment(MoreFragment())
-                        true
-                    }
+                    R.id.nav_hamburger -> { replaceFragment(MoreFragment()); true }
                     else -> false
                 }
             }
         }
 
-        val onBackPressedCallback = object : OnBackPressedCallback(true) {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 MaterialAlertDialogBuilder(this@HomeActivity)
                     .setTitle("Exit")
                     .setMessage("Are you sure you want to exit the app?")
-                    .setPositiveButton("Yes") { _, _ ->
-                        finishAffinity()
-                    }
+                    .setPositiveButton("Yes") { _, _ -> finishAffinity() }
                     .setNegativeButton("No", null)
                     .show()
             }
-        }
-        onBackPressedDispatcher.addCallback(this, onBackPressedCallback)
+        })
 
         checkNotificationPermission()
         listenForNotifications()
         listenForAnnouncements()
+        listenForNewMessages()
+    }
+
+    private fun listenForNewMessages() {
+        val userId = auth.currentUser?.uid ?: return
+        
+        messageListener = db.collection("userChats").document(userId).collection("chats")
+            .addSnapshotListener { snapshot, e ->
+                if (e != null || snapshot == null) return@addSnapshotListener
+                
+                for (dc in snapshot.documentChanges) {
+                    if (dc.type == DocumentChange.Type.MODIFIED) {
+                        val unreadCount = dc.document.getLong("unreadCount") ?: 0
+                        val lastMessageMap = dc.document.get("lastMessage") as? Map<*, *>
+                        val senderId = lastMessageMap?.get("senderId") as? String
+                        
+                        if (unreadCount > 0 && senderId != userId) {
+                            val content = lastMessageMap?.get("content") as? String ?: "New message"
+                            
+                            if (senderId != null) {
+                                db.collection("users").document(senderId).get().addOnSuccessListener { userDoc ->
+                                    val name = "${userDoc.getString("firstName")} ${userDoc.getString("lastName")}".trim()
+                                    showNotificationBanner(
+                                        title = "New Message",
+                                        message = "$name: $content",
+                                        type = "message",
+                                        entityId = dc.document.id
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+    }
+
+    private fun playNotificationSound() {
+        try {
+            val notification = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val r = RingtoneManager.getRingtone(applicationContext, notification)
+            r.play()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun showNotificationBanner(title: String, message: String, type: String, entityId: String?) {
+        mainHandler.post {
+            if (isFinishing || isDestroyed) return@post
+            
+            playNotificationSound()
+            
+            notificationTitle.text = title
+            notificationMessage.text = message
+            notificationBanner.visibility = View.VISIBLE
+
+            notificationBanner.setOnClickListener {
+                if (type == "message") {
+                    startActivity(Intent(this, MessagesActivity::class.java))
+                } else if (type == "comment" || type == "reaction") {
+                    if (entityId != null) {
+                        val intent = if (type == "comment") {
+                            Intent(this, CommentsActivity::class.java).apply { putExtra("POST_ID", entityId) }
+                        } else {
+                            Intent(this, SinglePostActivity::class.java).apply { putExtra("POST_ID", entityId) }
+                        }
+                        startActivity(intent)
+                    }
+                }
+                notificationBanner.visibility = View.GONE
+            }
+
+            notificationDismiss.setOnClickListener { notificationBanner.visibility = View.GONE }
+            
+            mainHandler.removeCallbacksAndMessages("banner_timeout")
+            mainHandler.postAtTime({
+                if (!isFinishing && !isDestroyed) notificationBanner.visibility = View.GONE
+            }, "banner_timeout", SystemClock.uptimeMillis() + 5000)
+        }
+    }
+
+    private fun listenForNotifications() {
+        val userId = auth.currentUser?.uid ?: return
+        notificationsListener = db.collection("users").document(userId).collection("notifications")
+            .orderBy("createdAt", Query.Direction.DESCENDING).limit(1)
+            .addSnapshotListener { snapshot, e ->
+                if (e != null || snapshot == null || snapshot.isEmpty) return@addSnapshotListener
+                if (snapshot.metadata.hasPendingWrites()) return@addSnapshotListener
+
+                val doc = snapshot.documents[0]
+                val type = doc.getString("type")
+                
+                if (type == "message") return@addSnapshotListener
+
+                if (!doc.getBoolean("isRead")!!) {
+                    val title = when (type) {
+                        "reaction" -> "New Reaction"
+                        "comment" -> "New Comment"
+                        else -> "New Notification"
+                    }
+                    showNotificationBanner(title, doc.getString("message") ?: "", type ?: "", doc.getString("entityId"))
+                }
+            }
     }
 
     override fun onResume() {
@@ -156,14 +248,9 @@ class HomeActivity : AppCompatActivity() {
             val statusData = mapOf(
                 "state" to "online",
                 "lastActive" to System.currentTimeMillis(),
-                "location" to mapOf(
-                    "latitude" to (location?.latitude ?: 0.0),
-                    "longitude" to (location?.longitude ?: 0.0)
-                )
+                "location" to mapOf("latitude" to (location?.latitude ?: 0.0), "longitude" to (location?.longitude ?: 0.0))
             )
-            FirebaseDatabase.getInstance().reference
-                .child("status").child(userId)
-                .setValue(statusData)
+            FirebaseDatabase.getInstance().reference.child("status").child(userId).setValue(statusData)
         }
     }
 
@@ -174,44 +261,33 @@ class HomeActivity : AppCompatActivity() {
         val statusData = mapOf(
             "state" to "offline",
             "lastActive" to System.currentTimeMillis(),
-            "location" to mapOf(
-                "latitude" to (location?.latitude ?: 0.0),
-                "longitude" to (location?.longitude ?: 0.0)
-            )
+            "location" to mapOf("latitude" to (location?.latitude ?: 0.0), "longitude" to (location?.longitude ?: 0.0))
         )
-        FirebaseDatabase.getInstance().reference
-            .child("status").child(userId)
-            .setValue(statusData)
+        FirebaseDatabase.getInstance().reference.child("status").child(userId).setValue(statusData)
     }
 
     override fun onDestroy() {
         super.onDestroy()
         announcementsListener?.remove()
         notificationsListener?.remove()
+        messageListener?.remove()
         mainHandler.removeCallbacksAndMessages(null)
     }
 
     private fun checkNotificationPermission() {
         val sharedPreferences = getSharedPreferences("app_prefs", MODE_PRIVATE)
         val hasSeenPrompt = sharedPreferences.getBoolean("has_seen_notification_prompt", false)
-
         if (!hasSeenPrompt && !NotificationManagerCompat.from(this).areNotificationsEnabled()) {
-            MaterialAlertDialogBuilder(this)
-                .setTitle("Enable Notifications")
-                .setMessage("Notifications are disabled. Enable them to stay updated.")
+            MaterialAlertDialogBuilder(this).setTitle("Enable Notifications").setMessage("Notifications are disabled. Enable them to stay updated.")
                 .setPositiveButton("Go to Settings") { _, _ ->
-                    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                        putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
-                    }
+                    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply { putExtra(Settings.EXTRA_APP_PACKAGE, packageName) }
                     startActivity(intent)
                     sharedPreferences.edit().putBoolean("has_seen_notification_prompt", true).apply()
                 }
                 .setNegativeButton("Not Now") { dialog, _ ->
                     dialog.dismiss()
                     sharedPreferences.edit().putBoolean("has_seen_notification_prompt", true).apply()
-                }
-                .setCancelable(false)
-                .show()
+                }.setCancelable(false).show()
         }
     }
 
@@ -230,143 +306,31 @@ class HomeActivity : AppCompatActivity() {
             window.statusBarColor = resources.getColor(R.color.red_orange, theme)
             WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = false
         }
-
-        supportFragmentManager.beginTransaction()
-            .replace(R.id.fragment_container, fragment)
-            .commit()
-    }
-
-    private fun showNotificationBanner(title: String, message: String, notificationId: String, type: String?, entityId: String?) {
-        mainHandler.post {
-            if (isFinishing || isDestroyed) return@post
-            
-            notificationTitle.text = title
-            notificationMessage.text = message
-            notificationBanner.visibility = View.VISIBLE
-
-            notificationBanner.setOnClickListener {
-                val userId = auth.currentUser?.uid
-                if (userId != null) {
-                    db.collection("users").document(userId)
-                        .collection("notifications").document(notificationId)
-                        .update("isRead", true)
-                }
-
-                when (type) {
-                    "reaction" -> {
-                        if (entityId != null) {
-                            val intent = Intent(this, SinglePostActivity::class.java).apply {
-                                putExtra("POST_ID", entityId)
-                            }
-                            startActivity(intent)
-                        }
-                    }
-                    "comment" -> {
-                        if (entityId != null) {
-                            val intent = Intent(this, CommentsActivity::class.java).apply {
-                                putExtra("POST_ID", entityId)
-                            }
-                            startActivity(intent)
-                        }
-                    }
-                    "message" -> {
-                        if (entityId != null) {
-                            val intent = Intent(this, ChatConversationActivity::class.java).apply {
-                                putExtra("chatId", entityId)
-                            }
-                            startActivity(intent)
-                        }
-                    }
-                }
-                
-                notificationBanner.visibility = View.GONE
-            }
-
-            notificationDismiss.setOnClickListener {
-                notificationBanner.visibility = View.GONE
-            }
-
-            mainHandler.removeCallbacksAndMessages("banner_timeout")
-            mainHandler.postAtTime({
-                if (!isFinishing && !isDestroyed) {
-                    notificationBanner.visibility = View.GONE
-                }
-            }, "banner_timeout", SystemClock.uptimeMillis() + 5000)
-        }
-    }
-
-    private fun listenForNotifications() {
-        val userId = auth.currentUser?.uid ?: return
-        val prefs = getSharedPreferences("shown_notifications", MODE_PRIVATE)
-
-        notificationsListener = db.collection("users").document(userId).collection("notifications")
-            .orderBy("createdAt", Query.Direction.DESCENDING).limit(1)
-            .addSnapshotListener { snapshot, e ->
-                if (e != null) {
-                    Log.e("HomeActivity", "Error listening for notifications", e)
-                    return@addSnapshotListener
-                }
-
-                // Optimization: Ignore local changes (optimistic updates)
-                if (snapshot != null && snapshot.metadata.hasPendingWrites()) return@addSnapshotListener
-
-                if (snapshot != null && !snapshot.isEmpty) {
-                    val doc = snapshot.documents[0]
-                    val notificationId = doc.id
-                    
-                    try {
-                        val notification = doc.toObject(Notification::class.java)
-                        
-                        if (notification != null && !notification.isRead && !prefs.getBoolean(notificationId, false)) {
-                            val title = when (notification.type) {
-                                "reaction" -> "New Reaction"
-                                "comment" -> "New Comment"
-                                "message" -> "New Message"
-                                else -> "New Notification"
-                            }
-                            
-                            val message = notification.message ?: "You have a new notification"
-                            
-                            showNotificationBanner(title, message, notificationId, notification.type, notification.entityId)
-                            prefs.edit().putBoolean(notificationId, true).apply()
-                        }
-                    } catch (ex: Exception) {
-                        Log.e("HomeActivity", "Error parsing notification object", ex)
-                    }
-                }
-            }
+        supportFragmentManager.beginTransaction().replace(R.id.fragment_container, fragment).commit()
     }
 
     private fun listenForAnnouncements() {
         val userId = auth.currentUser?.uid ?: return
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_navigation)
-
         db.collection("users").document(userId).addSnapshotListener { userDoc, _ ->
             if (userDoc == null || !userDoc.exists()) return@addSnapshotListener
             val lastRead = userDoc.getTimestamp("lastAnnouncementReadAt") ?: Timestamp(Date(0))
-            
             announcementsListener?.remove()
             announcementsListener = db.collection("posts")
-                .whereEqualTo("admin", true)
-                .whereGreaterThan("createdAt", lastRead)
+                .whereEqualTo("admin", true).whereGreaterThan("createdAt", lastRead)
                 .addSnapshotListener { snapshot, e ->
                     if (e != null) return@addSnapshotListener
-
                     val unreadCount = snapshot?.size() ?: 0
                     if (unreadCount > 0) {
                         val badge = bottomNav.getOrCreateBadge(R.id.nav_announcements)
-                        badge.isVisible = true
-                        badge.number = unreadCount
-                    } else {
-                        bottomNav.removeBadge(R.id.nav_announcements)
-                    }
+                        badge.isVisible = true; badge.number = unreadCount
+                    } else { bottomNav.removeBadge(R.id.nav_announcements) }
                 }
         }
     }
 
     private fun updateLastReadAnnouncement() {
         val userId = auth.currentUser?.uid ?: return
-        db.collection("users").document(userId)
-            .update("lastAnnouncementReadAt", Timestamp.now())
+        db.collection("users").document(userId).update("lastAnnouncementReadAt", Timestamp.now())
     }
 }
