@@ -1,5 +1,6 @@
 package com.aorv.blazerider
 
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -13,6 +14,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -51,7 +53,7 @@ class NotificationsFragment : Fragment() {
         val backButton = view.findViewById<ImageView>(R.id.back_button)
 
         adapter = NotificationsAdapter(displayNotifications) { displayNotification, position ->
-            markAsRead(displayNotification, position)
+            handleNotificationClick(displayNotification, position)
         }
         recyclerView.layoutManager = LinearLayoutManager(context)
         recyclerView.adapter = adapter
@@ -84,6 +86,9 @@ class NotificationsFragment : Fragment() {
                 }
                 if (snapshot == null) return@addSnapshotListener
 
+                // Ignore local metadata changes to prevent UI flickering
+                if (snapshot.metadata.hasPendingWrites()) return@addSnapshotListener
+
                 val sourceNotifications = snapshot.documents.mapNotNull { doc ->
                     doc.toObject(Notification::class.java)?.copy(documentId = doc.id)
                 }
@@ -94,7 +99,8 @@ class NotificationsFragment : Fragment() {
                             val title = if (notification.actorId != null) {
                                 fetchUserName(notification.actorId)
                             } else {
-                                notification.type.replaceFirstChar { it.titlecase(Locale.getDefault()) }
+                                if (notification.type == "weather") "Weather Update"
+                                else notification.type.replaceFirstChar { it.titlecase(Locale.getDefault()) }
                             }
                             DisplayNotification(
                                 title = title,
@@ -123,65 +129,84 @@ class NotificationsFragment : Fragment() {
         }
     }
 
-    private fun markAsRead(displayNotification: DisplayNotification, position: Int) {
+    private fun handleNotificationClick(displayNotification: DisplayNotification, position: Int) {
         val userId = auth.currentUser?.uid ?: return
         val original = displayNotification.original
 
-        if (original.isRead || original.documentId.isEmpty()) return
-
-        displayNotifications[position].isRead = true
-        adapter.notifyItemChanged(position)
-
-        db.collection("users").document(userId)
-            .collection("notifications").document(original.documentId)
-            .update("isRead", true)
-            .addOnFailureListener { e ->
-                showError("Failed to save read status. Please try again.")
-                displayNotifications[position].isRead = false
-                adapter.notifyItemChanged(position)
-                Log.e("NotificationsFragment", "Error updating isRead status", e)
-            }
-    }
-
-    private fun markAllAsRead() {
-        val userId = auth.currentUser?.uid ?: return
-        val batch = db.batch()
-
-        var somethingChanged = false
-        displayNotifications.forEachIndexed { index, displayNotif ->
-            if (!displayNotif.isRead) {
-                somethingChanged = true
-                val docRef = db.collection("users").document(userId)
-                    .collection("notifications").document(displayNotif.original.documentId)
-                batch.update(docRef, "isRead", true)
-                displayNotif.isRead = true
-            }
+        // Mark as read in Firestore if not already read
+        if (!original.isRead && original.documentId.isNotEmpty()) {
+            // Optimistic UI update
+            displayNotifications[position].isRead = true
+            adapter.notifyItemChanged(position)
+            
+            db.collection("users").document(userId)
+                .collection("notifications").document(original.documentId)
+                .update("isRead", true)
+                .addOnFailureListener { e ->
+                    // Revert UI if update fails
+                    displayNotifications[position].isRead = false
+                    adapter.notifyItemChanged(position)
+                    showError("Failed to update notification status")
+                }
         }
 
-        if (somethingChanged) {
-            adapter.notifyDataSetChanged()
-            batch.commit().addOnFailureListener { 
-                showError("Failed to mark all as read") 
-                loadNotifications()
+        // Redirect based on notification type
+        when (original.type) {
+            "reaction" -> {
+                original.entityId?.let { postId ->
+                    val intent = Intent(requireContext(), SinglePostActivity::class.java).apply {
+                        putExtra("POST_ID", postId)
+                    }
+                    startActivity(intent)
+                }
+            }
+            "comment" -> {
+                original.entityId?.let { postId ->
+                    val intent = Intent(requireContext(), CommentsActivity::class.java).apply {
+                        putExtra("POST_ID", postId)
+                    }
+                    startActivity(intent)
+                }
+            }
+            "message" -> {
+                original.entityId?.let { chatId ->
+                    val intent = Intent(requireContext(), ChatConversationActivity::class.java).apply {
+                        putExtra("chatId", chatId)
+                    }
+                    startActivity(intent)
+                }
             }
         }
     }
 
     private fun clearAllNotifications() {
-        val userId = auth.currentUser?.uid ?: return
+        val userId = auth.currentUser?.uid ?: run {
+            showError("User not logged in")
+            return
+        }
         if (displayNotifications.isEmpty()) return
 
-        val batch = db.batch()
-        displayNotifications.forEach { displayNotif ->
-            val docRef = db.collection("users").document(userId)
-                .collection("notifications").document(displayNotif.original.documentId)
-            batch.delete(docRef)
-        }
-
-        batch.commit().addOnFailureListener { 
-            showError("Failed to clear notifications")
-            loadNotifications()
-        }
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Clear All Notifications")
+            .setMessage("Are you sure you want to delete all notifications?")
+            .setPositiveButton("Clear") { _, _ ->
+                viewLifecycleOwner.lifecycleScope.launch {
+                    try {
+                        val batch = db.batch()
+                        displayNotifications.forEach { displayNotif ->
+                            val docRef = db.collection("users").document(userId)
+                                .collection("notifications").document(displayNotif.original.documentId)
+                            batch.delete(docRef)
+                        }
+                        batch.commit().await()
+                        Toast.makeText(context, "Notifications cleared", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        showError("Failed to clear notifications: ${e.message}")
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun updateUI() {

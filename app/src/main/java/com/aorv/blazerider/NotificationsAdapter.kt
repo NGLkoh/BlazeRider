@@ -6,9 +6,9 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
-import java.util.Locale
+import java.text.SimpleDateFormat
+import java.util.*
 
-// The adapter now works with the simple, display-ready data class.
 class NotificationsAdapter(
     private var notifications: List<DisplayNotification>,
     private val onItemClick: (DisplayNotification, Int) -> Unit
@@ -17,12 +17,21 @@ class NotificationsAdapter(
     inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         private val titleTextView: TextView = view.findViewById(R.id.notification_title)
         private val bodyTextView: TextView = view.findViewById(R.id.notification_body)
+        private val timeTextView: TextView = view.findViewById(R.id.notification_time)
         private val unreadDot: View = view.findViewById(R.id.unread_dot)
 
-        // The bind method is now much simpler. It just displays the data it's given.
         fun bind(displayNotification: DisplayNotification, position: Int, clickListener: (DisplayNotification, Int) -> Unit) {
             titleTextView.text = displayNotification.title
             bodyTextView.text = displayNotification.message
+            
+            val timestamp = displayNotification.original.createdAt
+            if (timestamp != null) {
+                val sdf = SimpleDateFormat("MMM dd, yyyy, hh:mm a", Locale.getDefault())
+                timeTextView.text = sdf.format(timestamp.toDate())
+                timeTextView.visibility = View.VISIBLE
+            } else {
+                timeTextView.visibility = View.GONE
+            }
 
             if (displayNotification.isRead) {
                 unreadDot.visibility = View.GONE
