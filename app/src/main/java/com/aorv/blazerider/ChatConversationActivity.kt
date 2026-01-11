@@ -14,6 +14,7 @@ import android.util.Log
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -38,7 +39,7 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
 import com.google.firebase.functions.FirebaseFunctions
-import com.google.gson.Gson
+import com.google.firebase.firestore.FieldValue
 
 class ChatConversationActivity : AppCompatActivity() {
     private lateinit var binding: ActivityChatConversationBinding
@@ -378,11 +379,44 @@ class ChatConversationActivity : AppCompatActivity() {
         db.collection("chats").document(chatId!!).collection("messages").document(messageId).set(message)
             .addOnSuccessListener {
                 updateLastMessageAndUnreadCount(message, messageId)
-                sendNotificationsToMembers(content)
+                createChatNotifications(content)
             }
             .addOnFailureListener { e ->
                 Toast.makeText(this, "Failed to send message", Toast.LENGTH_SHORT).show()
             }
+    }
+
+    private fun createChatNotifications(content: String) {
+        val currentUid = auth.currentUser?.uid ?: return
+        if (chatId == null) return
+
+        db.collection("chats").document(chatId!!).get().addOnSuccessListener { chatDoc ->
+            val membersMap = chatDoc.get("members") as? Map<String, Any> ?: return@addOnSuccessListener
+            val recipientIds = membersMap.keys.filter { it != currentUid }
+
+            db.collection("users").document(currentUid).get().addOnSuccessListener { userDoc ->
+                val firstName = userDoc.getString("firstName") ?: ""
+                val lastName = userDoc.getString("lastName") ?: ""
+                val senderName = "$firstName $lastName".trim()
+
+                recipientIds.forEach { recipientId ->
+                    val notification = hashMapOf(
+                        "actorId" to currentUid,
+                        "entityId" to chatId,
+                        "entityType" to "chat",
+                        "message" to "$senderName sent you a message: $content",
+                        "type" to "message",
+                        "createdAt" to FieldValue.serverTimestamp(),
+                        "isRead" to false,
+                        "metadata" to emptyMap<String, Any>()
+                    )
+
+                    db.collection("users").document(recipientId)
+                        .collection("notifications")
+                        .add(notification)
+                }
+            }
+        }
     }
 
     private fun updateLastMessageAndUnreadCount(message: Message, messageId: String) {
@@ -406,35 +440,6 @@ class ChatConversationActivity : AppCompatActivity() {
                 }.addOnFailureListener {
                     // Handle potential transaction failure
                 }
-            }
-        }
-    }
-
-    private fun sendNotificationsToMembers(messageContent: String) {
-        if (chatId == null) return
-        val currentUid = auth.currentUser?.uid ?: return
-
-        db.collection("chats").document(chatId!!).get().addOnSuccessListener { document ->
-            val members = document.get("members") as? Map<String, Any> ?: return@addOnSuccessListener
-            val recipientIds = members.keys.filter { it != currentUid }
-            if (recipientIds.isEmpty()) return@addOnSuccessListener
-
-            db.collection("users").whereIn("id", recipientIds).get().addOnSuccessListener { userDocs ->
-                val recipientTokens = userDocs.mapNotNull { it.getString("fcmToken") }
-                if (recipientTokens.isEmpty()) return@addOnSuccessListener
-
-                val senderName = auth.currentUser?.displayName ?: "Someone"
-                val chatName = document.getString("name") ?: userNameTextView.text.toString()
-
-                val data = hashMapOf(
-                    "recipientTokens" to recipientTokens,
-                    "senderName" to senderName,
-                    "message" to messageContent,
-                    "chatName" to chatName,
-                    "chatId" to chatId
-                )
-
-                functions.getHttpsCallable("sendChatNotification").call(data)
             }
         }
     }

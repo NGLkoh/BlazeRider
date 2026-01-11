@@ -21,17 +21,34 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <ImageButton
-            android:id="@+id/comments_close_button"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:layout_gravity="end|center_vertical"
-            android:background="@android:color/transparent"
-            android:src="@drawable/ic_close"
-            android:contentDescription="Close"
-            app:tint="@color/white"
-            android:scaleType="fitCenter"
-            android:layout_marginEnd="16dp" />
+            android:orientation="horizontal"
+            android:layout_marginEnd="16dp">
+
+            <ImageButton
+                android:id="@+id/comments_view_post_button"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:background="@android:color/transparent"
+                android:src="@drawable/ic_history"
+                android:contentDescription="View Post"
+                app:tint="@color/white"
+                android:scaleType="fitCenter"
+                android:layout_marginEnd="16dp" />
+
+            <ImageButton
+                android:id="@+id/comments_close_button"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:background="@android:color/transparent"
+                android:src="@drawable/ic_close"
+                android:contentDescription="Close"
+                app:tint="@color/white"
+                android:scaleType="fitCenter" />
+        </LinearLayout>
     </androidx.appcompat.widget.Toolbar>
 
     <!-- Comments List -->

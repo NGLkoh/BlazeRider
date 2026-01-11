@@ -61,6 +61,13 @@ class CommentsActivity : AppCompatActivity() {
 
         val postId = intent.getStringExtra("POST_ID") ?: return
 
+        findViewById<ImageButton>(R.id.comments_view_post_button).setOnClickListener {
+            val intent = Intent(this, SinglePostActivity::class.java).apply {
+                putExtra("POST_ID", postId)
+            }
+            startActivity(intent)
+        }
+
         recyclerView = findViewById(R.id.comment_list)
         recyclerView.layoutManager = LinearLayoutManager(this)
         commentsAdapter = CommentsAdapter(postId)
@@ -186,14 +193,15 @@ class CommentsActivity : AppCompatActivity() {
 
                                     val notificationMessage = "$commenterName commented on your post"
 
-                                    val notification = com.aorv.blazerider.Notification(
-                                        actorId = user.uid,
-                                        entityId = postId,
-                                        entityType = "post",
-                                        message = notificationMessage,
-                                        type = "comment",
-                                        createdAt = com.google.firebase.Timestamp.now(),
-                                        isRead = false
+                                    val notification = hashMapOf(
+                                        "actorId" to user.uid,
+                                        "entityId" to postId,
+                                        "entityType" to "post",
+                                        "message" to notificationMessage,
+                                        "type" to "comment",
+                                        "createdAt" to FieldValue.serverTimestamp(),
+                                        "isRead" to false,
+                                        "metadata" to emptyMap<String, Any>()
                                     )
 
                                     db.collection("users").document(postAuthorId)

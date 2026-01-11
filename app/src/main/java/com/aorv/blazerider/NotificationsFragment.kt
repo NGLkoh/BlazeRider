@@ -52,8 +52,8 @@ class NotificationsFragment : Fragment() {
         val clearAllButton = view.findViewById<Button>(R.id.clear_all_button)
         val backButton = view.findViewById<ImageView>(R.id.back_button)
 
-        adapter = NotificationsAdapter(displayNotifications) { displayNotification, position ->
-            handleNotificationClick(displayNotification, position)
+        adapter = NotificationsAdapter(displayNotifications) { displayNotification, _ ->
+            handleNotificationClick(displayNotification)
         }
         recyclerView.layoutManager = LinearLayoutManager(context)
         recyclerView.adapter = adapter
@@ -129,23 +129,23 @@ class NotificationsFragment : Fragment() {
         }
     }
 
-    private fun handleNotificationClick(displayNotification: DisplayNotification, position: Int) {
+    private fun handleNotificationClick(displayNotification: DisplayNotification) {
         val userId = auth.currentUser?.uid ?: return
         val original = displayNotification.original
 
         // Mark as read in Firestore if not already read
-        if (!original.isRead && original.documentId.isNotEmpty()) {
+        if (!displayNotification.isRead && original.documentId.isNotEmpty()) {
             // Optimistic UI update
-            displayNotifications[position].isRead = true
-            adapter.notifyItemChanged(position)
+            displayNotification.isRead = true
+            adapter.notifyDataSetChanged()
             
             db.collection("users").document(userId)
                 .collection("notifications").document(original.documentId)
                 .update("isRead", true)
                 .addOnFailureListener { e ->
                     // Revert UI if update fails
-                    displayNotifications[position].isRead = false
-                    adapter.notifyItemChanged(position)
+                    displayNotification.isRead = false
+                    adapter.notifyDataSetChanged()
                     showError("Failed to update notification status")
                 }
         }
@@ -194,9 +194,12 @@ class NotificationsFragment : Fragment() {
                     try {
                         val batch = db.batch()
                         displayNotifications.forEach { displayNotif ->
-                            val docRef = db.collection("users").document(userId)
-                                .collection("notifications").document(displayNotif.original.documentId)
-                            batch.delete(docRef)
+                            val docId = displayNotif.original.documentId
+                            if (docId.isNotEmpty()) {
+                                val docRef = db.collection("users").document(userId)
+                                    .collection("notifications").document(docId)
+                                batch.delete(docRef)
+                            }
                         }
                         batch.commit().await()
                         Toast.makeText(context, "Notifications cleared", Toast.LENGTH_SHORT).show()
