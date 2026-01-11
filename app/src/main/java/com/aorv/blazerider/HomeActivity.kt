@@ -45,6 +45,7 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var locationViewModel: LocationViewModel
     private var announcementsListener: ListenerRegistration? = null
     private var notificationsListener: ListenerRegistration? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     // Notification Banner
     private lateinit var notificationBanner: CardView
@@ -187,6 +188,7 @@ class HomeActivity : AppCompatActivity() {
         super.onDestroy()
         announcementsListener?.remove()
         notificationsListener?.remove()
+        mainHandler.removeCallbacksAndMessages(null)
     }
 
     private fun checkNotificationPermission() {
@@ -234,18 +236,63 @@ class HomeActivity : AppCompatActivity() {
             .commit()
     }
 
-    private fun showNotificationBanner(title: String, message: String) {
-        notificationTitle.text = title
-        notificationMessage.text = message
-        notificationBanner.visibility = View.VISIBLE
+    private fun showNotificationBanner(title: String, message: String, notificationId: String, type: String?, entityId: String?) {
+        mainHandler.post {
+            if (isFinishing || isDestroyed) return@post
+            
+            notificationTitle.text = title
+            notificationMessage.text = message
+            notificationBanner.visibility = View.VISIBLE
 
-        notificationDismiss.setOnClickListener {
-            notificationBanner.visibility = View.GONE
+            notificationBanner.setOnClickListener {
+                val userId = auth.currentUser?.uid
+                if (userId != null) {
+                    db.collection("users").document(userId)
+                        .collection("notifications").document(notificationId)
+                        .update("isRead", true)
+                }
+
+                when (type) {
+                    "reaction" -> {
+                        if (entityId != null) {
+                            val intent = Intent(this, SinglePostActivity::class.java).apply {
+                                putExtra("POST_ID", entityId)
+                            }
+                            startActivity(intent)
+                        }
+                    }
+                    "comment" -> {
+                        if (entityId != null) {
+                            val intent = Intent(this, CommentsActivity::class.java).apply {
+                                putExtra("POST_ID", entityId)
+                            }
+                            startActivity(intent)
+                        }
+                    }
+                    "message" -> {
+                        if (entityId != null) {
+                            val intent = Intent(this, ChatConversationActivity::class.java).apply {
+                                putExtra("chatId", entityId)
+                            }
+                            startActivity(intent)
+                        }
+                    }
+                }
+                
+                notificationBanner.visibility = View.GONE
+            }
+
+            notificationDismiss.setOnClickListener {
+                notificationBanner.visibility = View.GONE
+            }
+
+            mainHandler.removeCallbacksAndMessages("banner_timeout")
+            mainHandler.postAtTime({
+                if (!isFinishing && !isDestroyed) {
+                    notificationBanner.visibility = View.GONE
+                }
+            }, "banner_timeout", SystemClock.uptimeMillis() + 5000)
         }
-
-        Handler(Looper.getMainLooper()).postDelayed({
-            notificationBanner.visibility = View.GONE
-        }, 5000)
     }
 
     private fun listenForNotifications() {
@@ -255,25 +302,36 @@ class HomeActivity : AppCompatActivity() {
         notificationsListener = db.collection("users").document(userId).collection("notifications")
             .orderBy("createdAt", Query.Direction.DESCENDING).limit(1)
             .addSnapshotListener { snapshot, e ->
-                if (e != null) return@addSnapshotListener
+                if (e != null) {
+                    Log.e("HomeActivity", "Error listening for notifications", e)
+                    return@addSnapshotListener
+                }
+
+                // Optimization: Ignore local changes (optimistic updates)
+                if (snapshot != null && snapshot.metadata.hasPendingWrites()) return@addSnapshotListener
 
                 if (snapshot != null && !snapshot.isEmpty) {
                     val doc = snapshot.documents[0]
                     val notificationId = doc.id
-                    val notification = doc.toObject(Notification::class.java)
                     
-                    // Only show banner if not read AND not shown yet in this local session
-                    if (notification != null && !notification.isRead && !prefs.getBoolean(notificationId, false)) {
-                        val title = when (notification.type) {
-                            "reaction" -> "New Reaction"
-                            "comment" -> "New Comment"
-                            "message" -> "New Message"
-                            else -> "New Notification"
-                        }
-                        showNotificationBanner(title, notification.message)
+                    try {
+                        val notification = doc.toObject(Notification::class.java)
                         
-                        // Mark as shown LOCALLY so banner doesn't repeat, but keep as unread in DB
-                        prefs.edit().putBoolean(notificationId, true).apply()
+                        if (notification != null && !notification.isRead && !prefs.getBoolean(notificationId, false)) {
+                            val title = when (notification.type) {
+                                "reaction" -> "New Reaction"
+                                "comment" -> "New Comment"
+                                "message" -> "New Message"
+                                else -> "New Notification"
+                            }
+                            
+                            val message = notification.message ?: "You have a new notification"
+                            
+                            showNotificationBanner(title, message, notificationId, notification.type, notification.entityId)
+                            prefs.edit().putBoolean(notificationId, true).apply()
+                        }
+                    } catch (ex: Exception) {
+                        Log.e("HomeActivity", "Error parsing notification object", ex)
                     }
                 }
             }
@@ -284,7 +342,8 @@ class HomeActivity : AppCompatActivity() {
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_navigation)
 
         db.collection("users").document(userId).addSnapshotListener { userDoc, _ ->
-            val lastRead = userDoc?.getTimestamp("lastAnnouncementReadAt") ?: Timestamp(Date(0))
+            if (userDoc == null || !userDoc.exists()) return@addSnapshotListener
+            val lastRead = userDoc.getTimestamp("lastAnnouncementReadAt") ?: Timestamp(Date(0))
             
             announcementsListener?.remove()
             announcementsListener = db.collection("posts")
