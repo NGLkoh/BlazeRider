@@ -14,12 +14,14 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.RequestOptions
+import com.google.firebase.firestore.ListenerRegistration
 
 class MoreFragment : Fragment() {
 
     private lateinit var auth: FirebaseAuth
     private lateinit var db: FirebaseFirestore
     private var isAdmin: Boolean = false // Default value
+    private var notificationsListener: ListenerRegistration? = null
 
     companion object {
         private const val ARG_IS_ADMIN = "isAdmin"
@@ -53,6 +55,7 @@ class MoreFragment : Fragment() {
         val historyLayout = view.findViewById<LinearLayout>(R.id.history)
         val changePasswordLayout = view.findViewById<LinearLayout>(R.id.change_password)
         val notificationLayout = view.findViewById<LinearLayout>(R.id.notification)
+        val notificationCountTextView = view.findViewById<TextView>(R.id.notification_count)
 
         // Set visibility of edit_profile based on isAdmin
         view.findViewById<View>(R.id.edit_profile).visibility = if (!isAdmin) View.VISIBLE else View.GONE
@@ -103,6 +106,25 @@ class MoreFragment : Fragment() {
                     view.findViewById<ShapeableImageView>(R.id.user_image)
                         .setImageResource(R.drawable.ic_blank)
                 }
+
+            // Listen for unread notifications
+            notificationsListener = db.collection("users").document(currentUser.uid)
+                .collection("notifications")
+                .whereEqualTo("isRead", false)
+                .addSnapshotListener { snapshot, e ->
+                    if (e != null) {
+                        notificationCountTextView.visibility = View.GONE
+                        return@addSnapshotListener
+                    }
+
+                    val unreadCount = snapshot?.size() ?: 0
+                    if (unreadCount > 0) {
+                        notificationCountTextView.text = unreadCount.toString()
+                        notificationCountTextView.visibility = View.VISIBLE
+                    } else {
+                        notificationCountTextView.visibility = View.GONE
+                    }
+                }
         } else {
             view.findViewById<TextView>(R.id.user_name).text = "User"
             view.findViewById<TextView>(R.id.user_email).text = "user@gmail.com"
@@ -142,6 +164,11 @@ class MoreFragment : Fragment() {
         }
 
         return view
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        notificationsListener?.remove()
     }
 
     private fun showLogoutDialog() {

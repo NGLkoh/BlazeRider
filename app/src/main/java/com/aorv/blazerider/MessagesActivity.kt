@@ -326,9 +326,19 @@ class MessagesActivity : AppCompatActivity() {
     }
 
     private fun filterChats(query: String) {
-        val filteredList = chats.filter { chat ->
+        var filteredList = chats.filter { chat ->
             chat.name.contains(query, ignoreCase = true)
         }
+
+        when (binding.filterChipGroup.checkedChipId) {
+            R.id.chip_unread -> {
+                filteredList = filteredList.filter { it.unreadCount > 0 }
+            }
+            R.id.chip_groups -> {
+                filteredList = filteredList.filter { it.type == "group" }
+            }
+        }
+
         adapter.updateChats(filteredList)
     }
 

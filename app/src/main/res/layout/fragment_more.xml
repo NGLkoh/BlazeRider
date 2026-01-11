@@ -117,11 +117,26 @@
                     android:src="@drawable/ic_notifications" />
 
                 <TextView
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_weight="1"
                     android:text="Notifications"
                     android:textSize="16sp"
                     android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/notification_count"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_circle_red"
+                    android:gravity="center"
+                    android:minWidth="20dp"
+                    android:minHeight="20dp"
+                    android:padding="2dp"
+                    android:text="0"
+                    android:textColor="@android:color/white"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
             </LinearLayout>
 
             <LinearLayout

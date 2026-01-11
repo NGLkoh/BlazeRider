@@ -31,6 +31,9 @@ import com.google.firebase.firestore.Query
 import androidx.lifecycle.ViewModelProvider
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
+import com.google.firebase.Timestamp
+import com.google.firebase.firestore.ListenerRegistration
+import java.util.Date
 
 class HomeActivity : AppCompatActivity() {
 
@@ -40,6 +43,8 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var db: FirebaseFirestore
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationViewModel: LocationViewModel
+    private var announcementsListener: ListenerRegistration? = null
+    private var notificationsListener: ListenerRegistration? = null
 
     // Notification Banner
     private lateinit var notificationBanner: CardView
@@ -75,8 +80,6 @@ class HomeActivity : AppCompatActivity() {
             // Apply insets to the main container
             val fragmentContainer = findViewById<FrameLayout>(R.id.fragment_container)
             fragmentContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                // This logic seems reversed, but it correctly handles the fragment padding
-                // when the status bar is transparent.
                 if (isStatusBarTransparent()) {
                     topMargin = 0
                 } else {
@@ -105,6 +108,8 @@ class HomeActivity : AppCompatActivity() {
                     }
                     R.id.nav_announcements -> {
                         replaceFragment(AnnouncementsFragment())
+                        updateLastReadAnnouncement()
+                        bottomNav.removeBadge(R.id.nav_announcements)
                         true
                     }
                     R.id.nav_home -> {
@@ -140,11 +145,11 @@ class HomeActivity : AppCompatActivity() {
 
         checkNotificationPermission()
         listenForNotifications()
+        listenForAnnouncements()
     }
-    
+
     override fun onResume() {
         super.onResume()
-        // Set user status to online
         val userId = auth.currentUser?.uid ?: return
         locationViewModel.lastKnownLocation.observe(this) { location ->
             val statusData = mapOf(
@@ -158,18 +163,11 @@ class HomeActivity : AppCompatActivity() {
             FirebaseDatabase.getInstance().reference
                 .child("status").child(userId)
                 .setValue(statusData)
-                .addOnSuccessListener {
-                    Log.d("HomeActivity", "Status set to online for user: $userId")
-                }
-                .addOnFailureListener { e ->
-                    Log.e("HomeActivity", "Failed to set online status: ${e.message}")
-                }
         }
     }
 
     override fun onPause() {
         super.onPause()
-        // Set user status to offline
         val userId = auth.currentUser?.uid ?: return
         val location = locationViewModel.lastKnownLocation.value
         val statusData = mapOf(
@@ -183,12 +181,12 @@ class HomeActivity : AppCompatActivity() {
         FirebaseDatabase.getInstance().reference
             .child("status").child(userId)
             .setValue(statusData)
-            .addOnSuccessListener {
-                Log.d("HomeActivity", "Status set to offline for user: $userId")
-            }
-            .addOnFailureListener { e ->
-                Log.e("HomeActivity", "Failed to set offline status: ${e.message}")
-            }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        announcementsListener?.remove()
+        notificationsListener?.remove()
     }
 
     private fun checkNotificationPermission() {
@@ -198,7 +196,7 @@ class HomeActivity : AppCompatActivity() {
         if (!hasSeenPrompt && !NotificationManagerCompat.from(this).areNotificationsEnabled()) {
             MaterialAlertDialogBuilder(this)
                 .setTitle("Enable Notifications")
-                .setMessage("Notifications are disabled. Enable them to stay updated with important alerts.")
+                .setMessage("Notifications are disabled. Enable them to stay updated.")
                 .setPositiveButton("Go to Settings") { _, _ ->
                     val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
                         putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
@@ -247,24 +245,25 @@ class HomeActivity : AppCompatActivity() {
 
         Handler(Looper.getMainLooper()).postDelayed({
             notificationBanner.visibility = View.GONE
-        }, 5000) // Hide after 5 seconds
+        }, 5000)
     }
 
     private fun listenForNotifications() {
         val userId = auth.currentUser?.uid ?: return
+        val prefs = getSharedPreferences("shown_notifications", MODE_PRIVATE)
 
-        db.collection("users").document(userId).collection("notifications")
+        notificationsListener = db.collection("users").document(userId).collection("notifications")
             .orderBy("createdAt", Query.Direction.DESCENDING).limit(1)
             .addSnapshotListener { snapshot, e ->
-                if (e != null) {
-                    Log.w("HomeActivity", "Listen failed.", e)
-                    return@addSnapshotListener
-                }
+                if (e != null) return@addSnapshotListener
 
                 if (snapshot != null && !snapshot.isEmpty) {
                     val doc = snapshot.documents[0]
+                    val notificationId = doc.id
                     val notification = doc.toObject(Notification::class.java)
-                    if (notification != null && !notification.isRead) {
+                    
+                    // Only show banner if not read AND not shown yet in this local session
+                    if (notification != null && !notification.isRead && !prefs.getBoolean(notificationId, false)) {
                         val title = when (notification.type) {
                             "reaction" -> "New Reaction"
                             "comment" -> "New Comment"
@@ -272,10 +271,43 @@ class HomeActivity : AppCompatActivity() {
                             else -> "New Notification"
                         }
                         showNotificationBanner(title, notification.message)
-                        // Mark as read to prevent showing again
-                        doc.reference.update("isRead", true)
+                        
+                        // Mark as shown LOCALLY so banner doesn't repeat, but keep as unread in DB
+                        prefs.edit().putBoolean(notificationId, true).apply()
                     }
                 }
             }
+    }
+
+    private fun listenForAnnouncements() {
+        val userId = auth.currentUser?.uid ?: return
+        val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_navigation)
+
+        db.collection("users").document(userId).addSnapshotListener { userDoc, _ ->
+            val lastRead = userDoc?.getTimestamp("lastAnnouncementReadAt") ?: Timestamp(Date(0))
+            
+            announcementsListener?.remove()
+            announcementsListener = db.collection("posts")
+                .whereEqualTo("admin", true)
+                .whereGreaterThan("createdAt", lastRead)
+                .addSnapshotListener { snapshot, e ->
+                    if (e != null) return@addSnapshotListener
+
+                    val unreadCount = snapshot?.size() ?: 0
+                    if (unreadCount > 0) {
+                        val badge = bottomNav.getOrCreateBadge(R.id.nav_announcements)
+                        badge.isVisible = true
+                        badge.number = unreadCount
+                    } else {
+                        bottomNav.removeBadge(R.id.nav_announcements)
+                    }
+                }
+        }
+    }
+
+    private fun updateLastReadAnnouncement() {
+        val userId = auth.currentUser?.uid ?: return
+        db.collection("users").document(userId)
+            .update("lastAnnouncementReadAt", Timestamp.now())
     }
 }

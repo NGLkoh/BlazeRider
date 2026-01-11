@@ -124,6 +124,7 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
     // Static flag to track if the welcome dialog has been shown in this app session
     companion object {
         private var hasShownWelcomeDialog = false
+        private var hasFetchedWeather = false
     }
 
     private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -275,49 +276,52 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
                         locationViewModel.updateLocation(newLocation) // Update ViewModel
                         map.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLocation!!, 15f))
 
-                        // Update cityName from weather API
-                        CoroutineScope(Dispatchers.IO).launch {
-                            try {
-                                val weatherUrl = "https://api.openweathermap.org/data/2.5/weather?lat=${location.latitude}&lon=${location.longitude}&appid=$weatherApiKey&units=metric"
-                                val weatherRequest = Request.Builder().url(weatherUrl).build()
-                                val weatherResponse = okHttpClient.newCall(weatherRequest).execute()
-                                val weatherJson = weatherResponse.body?.string()
+                        // Update cityName from weather API only once per session
+                        if (!hasFetchedWeather) {
+                            CoroutineScope(Dispatchers.IO).launch {
+                                try {
+                                    val weatherUrl = "https://api.openweathermap.org/data/2.5/weather?lat=${location.latitude}&lon=${location.longitude}&appid=$weatherApiKey&units=metric"
+                                    val weatherRequest = Request.Builder().url(weatherUrl).build()
+                                    val weatherResponse = okHttpClient.newCall(weatherRequest).execute()
+                                    val weatherJson = weatherResponse.body?.string()
 
-                                Log.d("Weather", "Response for ${location.latitude}, ${location.longitude}: $weatherJson")
+                                    Log.d("Weather", "Response for ${location.latitude}, ${location.longitude}: $weatherJson")
 
-                                if (!weatherResponse.isSuccessful) {
-                                    throw Exception("Weather API error: ${weatherResponse.code} ${weatherResponse.message}")
+                                    if (!weatherResponse.isSuccessful) {
+                                        throw Exception("Weather API error: ${weatherResponse.code} ${weatherResponse.message}")
+                                    }
+
+                                    if (weatherJson.isNullOrEmpty()) {
+                                        throw Exception("Empty weather response")
+                                    }
+
+                                    val jsonObject = JSONObject(weatherJson)
+                                    val weatherArray = jsonObject.getJSONArray("weather")
+                                    if (weatherArray.length() == 0) {
+                                        throw Exception("No weather data available")
+                                    }
+
+                                    val weather = weatherArray.getJSONObject(0)
+                                    val weatherDescription = weather.getString("description").replaceFirstChar { it.uppercase() }
+                                    val temperature = jsonObject.getJSONObject("main").getDouble("temp")
+                                    cityName = jsonObject.getString("name").takeIf { it.isNotEmpty() } ?: "Current Location"
+                                    Log.d("LocationFragment", "Updated cityName: $cityName")
+
+                                    val message = "Location: $cityName (${location.latitude}, ${location.longitude})\nWeather: $weatherDescription, Temp: ${String.format("%.1f", temperature)}°C"
+
+                                    withContext(Dispatchers.Main) {
+                                        sendNotification("Weather Update", message)
+                                        hasFetchedWeather = true
+                                    }
+
+                                    saveNotificationToFirestore(message, jsonObject, location.latitude, location.longitude)
+                                } catch (e: Exception) {
+                                    Log.e("Weather", "Error fetching weather: ${e.message}", e)
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(requireContext(), "Failed to fetch city name: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                                    cityName = "Current Location"
                                 }
-
-                                if (weatherJson.isNullOrEmpty()) {
-                                    throw Exception("Empty weather response")
-                                }
-
-                                val jsonObject = JSONObject(weatherJson)
-                                val weatherArray = jsonObject.getJSONArray("weather")
-                                if (weatherArray.length() == 0) {
-                                    throw Exception("No weather data available")
-                                }
-
-                                val weather = weatherArray.getJSONObject(0)
-                                val weatherDescription = weather.getString("description").replaceFirstChar { it.uppercase() }
-                                val temperature = jsonObject.getJSONObject("main").getDouble("temp")
-                                cityName = jsonObject.getString("name").takeIf { it.isNotEmpty() } ?: "Current Location"
-                                Log.d("LocationFragment", "Updated cityName: $cityName")
-
-                                val message = "Location: $cityName (${location.latitude}, ${location.longitude})\nWeather: $weatherDescription, Temp: ${String.format("%.1f", temperature)}°C"
-
-                                withContext(Dispatchers.Main) {
-                                    sendNotification("Weather Update", message)
-                                }
-
-                                saveNotificationToFirestore(message, jsonObject, location.latitude, location.longitude)
-                            } catch (e: Exception) {
-                                Log.e("Weather", "Error fetching weather: ${e.message}", e)
-                                withContext(Dispatchers.Main) {
-                                    Toast.makeText(requireContext(), "Failed to fetch city name: ${e.message}", Toast.LENGTH_SHORT).show()
-                                }
-                                cityName = "Current Location"
                             }
                         }
 
