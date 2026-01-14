@@ -6,14 +6,6 @@
         <entry key="Firebase Crashlytics">
           <value>
             <InsightsFilterSettings>
-              <option name="connection">
-                <ConnectionSetting>
-                  <option name="appId" value="com.aorv.blazerider" />
-                  <option name="mobileSdkAppId" value="1:447832742457:android:3f43bad7dce2b447170be8" />
-                  <option name="projectId" value="blaze-rider-4dfdd" />
-                  <option name="projectNumber" value="447832742457" />
-                </ConnectionSetting>
-              </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />
               <option name="timeIntervalDays" value="THIRTY_DAYS" />
               <option name="visibilityType" value="ALL" />

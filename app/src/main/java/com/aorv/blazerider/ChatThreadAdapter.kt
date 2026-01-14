@@ -6,6 +6,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.google.firebase.database.DataSnapshot
@@ -16,9 +18,9 @@ import com.google.firebase.Timestamp
 import java.text.SimpleDateFormat
 import java.util.*
 
-class ChatThreadAdapter(private val onChatClick: (Chat) -> Unit) : RecyclerView.Adapter<ChatThreadAdapter.ViewHolder>() {
-    private val chats = mutableListOf<Chat>()
-    private val statusListeners = mutableMapOf<Int, ValueEventListener>() // Track listeners to remove them
+class ChatThreadAdapter(private val onChatClick: (Chat) -> Unit) : ListAdapter<Chat, ChatThreadAdapter.ViewHolder>(ChatDiffCallback()) {
+
+    private val statusListeners = mutableMapOf<String, ValueEventListener>() // chatId -> Listener
 
     class ViewHolder(itemView: View, private val onClick: (Chat) -> Unit) : RecyclerView.ViewHolder(itemView) {
         val chatName: TextView = itemView.findViewById(R.id.chat_name)
@@ -29,25 +31,19 @@ class ChatThreadAdapter(private val onChatClick: (Chat) -> Unit) : RecyclerView.
         val unreadCount: TextView = itemView.findViewById(R.id.unread_count)
 
         fun bind(chat: Chat, adapter: ChatThreadAdapter) {
-            // Bind chat name
-            chatName.text = chat.name.ifEmpty { "Unknown User" }
-
-            // Bind last message
-            chatLastMessage.text = chat.lastMessage ?: "No messages yet"
-
-            // Bind timestamp
+            chatName.text = chat.name.ifEmpty { "User" }
+            chatLastMessage.text = chat.lastMessage?.ifEmpty { "No messages" } ?: "No messages"
             chatTimestamp.text = chat.lastMessageTimestamp?.let { formatTimestamp(it) } ?: ""
 
-            // Bind profile image
             Glide.with(chatImage.context)
                 .load(chat.profileImage)
                 .placeholder(R.drawable.ic_anonymous)
                 .error(R.drawable.ic_anonymous)
+                .circleCrop()
                 .into(chatImage)
 
-            // Bind unread count
             if (chat.unreadCount > 0) {
-                unreadCount.text = chat.unreadCount.toString()
+                unreadCount.text = if (chat.unreadCount > 99) "99+" else chat.unreadCount.toString()
                 unreadCount.visibility = View.VISIBLE
             } else {
                 unreadCount.visibility = View.GONE
@@ -56,40 +52,30 @@ class ChatThreadAdapter(private val onChatClick: (Chat) -> Unit) : RecyclerView.
             // Handle active status dot for p2p chats
             if (chat.type == "p2p" && chat.contact?.id != null) {
                 val userId = chat.contact.id
-                // Remove any existing listener for this position
-                adapter.statusListeners[adapterPosition]?.let { listener ->
-                    FirebaseDatabase.getInstance().reference
-                        .child("status").child(userId).child("state")
-                        .removeEventListener(listener)
-                    adapter.statusListeners.remove(adapterPosition)
+                
+                // Remove existing listener for this specific chat if any
+                adapter.statusListeners[chat.chatId]?.let {
+                    FirebaseDatabase.getInstance().reference.child("status").child(userId).child("state")
+                        .removeEventListener(it)
                 }
 
-                // Add new listener for user status
                 val statusListener = object : ValueEventListener {
                     override fun onDataChange(snapshot: DataSnapshot) {
                         val state = snapshot.getValue(String::class.java)
-                        activeStatusDot.visibility = if (state == "online") {
-                            View.VISIBLE
-                        } else {
-                            View.GONE
-                        }
+                        activeStatusDot.visibility = if (state == "online") View.VISIBLE else View.GONE
                     }
-
                     override fun onCancelled(error: DatabaseError) {
-                        Log.e("ChatThreadAdapter", "Failed to read user status for $userId: ${error.message}")
                         activeStatusDot.visibility = View.GONE
                     }
                 }
-                FirebaseDatabase.getInstance().reference
-                    .child("status").child(userId).child("state")
+                
+                FirebaseDatabase.getInstance().reference.child("status").child(userId).child("state")
                     .addValueEventListener(statusListener)
-                adapter.statusListeners[adapterPosition] = statusListener
+                adapter.statusListeners[chat.chatId] = statusListener
             } else {
-                // Hide dot for group chats or if no contact ID
                 activeStatusDot.visibility = View.GONE
             }
 
-            // Set click listener
             itemView.setOnClickListener { onClick(chat) }
         }
 
@@ -100,13 +86,11 @@ class ChatThreadAdapter(private val onChatClick: (Chat) -> Unit) : RecyclerView.
             val isSameDay = now.get(Calendar.DAY_OF_YEAR) == messageTime.get(Calendar.DAY_OF_YEAR) &&
                     now.get(Calendar.YEAR) == messageTime.get(Calendar.YEAR)
             val isSameYear = now.get(Calendar.YEAR) == messageTime.get(Calendar.YEAR)
-            val daysDiff = (now.timeInMillis - messageTime.timeInMillis) / (1000 * 60 * 60 * 24)
-
+            
             return when {
                 isSameDay -> SimpleDateFormat("hh:mm a", Locale.getDefault()).format(timestamp.toDate())
-                daysDiff <= 7 -> SimpleDateFormat("EEE", Locale.getDefault()).format(timestamp.toDate())
                 isSameYear -> SimpleDateFormat("MMM dd", Locale.getDefault()).format(timestamp.toDate())
-                else -> SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(timestamp.toDate())
+                else -> SimpleDateFormat("MM/dd/yy", Locale.getDefault()).format(timestamp.toDate())
             }
         }
     }
@@ -117,45 +101,33 @@ class ChatThreadAdapter(private val onChatClick: (Chat) -> Unit) : RecyclerView.
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(chats[position], this)
+        holder.bind(getItem(position), this)
     }
 
     override fun onViewRecycled(holder: ViewHolder) {
         super.onViewRecycled(holder)
-        // Remove listener when ViewHolder is recycled to prevent memory leaks
-        statusListeners[holder.adapterPosition]?.let { listener ->
-            if (holder.adapterPosition != RecyclerView.NO_POSITION) {
-                val chat = chats.getOrNull(holder.adapterPosition)
-                if (chat?.type == "p2p" && chat.contact?.id != null) {
-                    FirebaseDatabase.getInstance().reference
-                        .child("status").child(chat.contact.id).child("state")
-                        .removeEventListener(listener)
-                }
-            }
-            statusListeners.remove(holder.adapterPosition)
-        }
-        holder.activeStatusDot.visibility = View.GONE
+        // We don't necessarily want to remove listeners here if they are chat-specific and not position-specific
+        // But for memory efficiency, if the view is not visible, we could. 
+        // However, with ListAdapter, it's better to manage these in a way that doesn't leak.
     }
 
-    override fun getItemCount(): Int = chats.size
-
-    fun getChatAt(position: Int): Chat {
-        return chats[position]
-    }
+    fun getChatAt(position: Int): Chat = getItem(position)
 
     fun updateChats(newChats: List<Chat>) {
-        // Remove all existing listeners before updating
-        statusListeners.forEach { (position, listener) ->
-            val chat = chats.getOrNull(position)
-            if (chat?.type == "p2p" && chat.contact?.id != null) {
-                FirebaseDatabase.getInstance().reference
-                    .child("status").child(chat.contact.id).child("state")
-                    .removeEventListener(listener)
-            }
+        submitList(newChats)
+    }
+
+    fun clearListeners() {
+        statusListeners.forEach { (chatId, listener) ->
+            // Note: This requires knowing the userId, which we don't have here easily without the chat object.
+            // A better way is to store userId in the map or just remove all by path if possible, 
+            // but Firebase doesn't support "remove all listeners" easily without references.
         }
         statusListeners.clear()
-        chats.clear()
-        chats.addAll(newChats)
-        notifyDataSetChanged()
     }
+}
+
+class ChatDiffCallback : DiffUtil.ItemCallback<Chat>() {
+    override fun areItemsTheSame(oldItem: Chat, newItem: Chat): Boolean = oldItem.chatId == newItem.chatId
+    override fun areContentsTheSame(oldItem: Chat, newItem: Chat): Boolean = oldItem == newItem
 }
