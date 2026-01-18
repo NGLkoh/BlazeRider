@@ -15,4 +15,5 @@
     <color name="gray_search">#151515</color>
     <color name="status_bar_color">#FF000000</color> <!-- Black or your preferred color -->
     <color name="primary_text_color">#000000</color>
+    <color name="blue">#2196F3</color>
 </resources>

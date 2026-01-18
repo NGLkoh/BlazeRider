@@ -1,6 +1,7 @@
 package com.aorv.blazerider
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -21,19 +22,6 @@ import com.aorv.blazerider.databinding.ItemRidesBinding
 import java.text.SimpleDateFormat
 import java.util.*
 import com.aorv.blazerider.User
-
-data class SharedRide(
-    val datetime: Timestamp? = null,
-    val destination: String? = null,
-    val destinationCoordinates: Map<String, Double>? = null,
-    val distance: Double? = null,
-    val duration: Double? = null,
-    val origin: String? = null,
-    val originCoordinates: Map<String, Double>? = null,
-    val userUid: String? = null,
-    val joinedRiders: Map<String, Map<String, Any>>? = null,
-    val sharedRoutesId: String? = null
-)
 
 class SharedRidesFragment : Fragment() {
 
@@ -72,7 +60,10 @@ class SharedRidesFragment : Fragment() {
                         null
                     }
                 } ?: emptyList()
-                adapter.submitList(rides)
+                
+                // Hide completed rides from the shared feed
+                val visibleRides = rides.filter { it.status != "completed" }
+                adapter.submitList(visibleRides)
             }
     }
 
@@ -120,32 +111,39 @@ class SharedRidesFragment : Fragment() {
                 binding.distance.text = "Distance: ${ride.distance?.let { String.format("%.2f km", it) } ?: "Unknown"}"
                 binding.duration.text = "Duration: ${formatDuration(ride.duration)}"
                 val ridersCount = ride.joinedRiders?.size ?: 0
-                binding.rideNumbers.text = "$ridersCount ${if (ridersCount <= 1) "joined" else "joined"}"
+                binding.rideNumbers.text = "$ridersCount joined"
 
                 // Check if user is already in a ride
                 auth.currentUser?.uid?.let { userId ->
-                    if (ride.userUid == userId) {
+                    val isRideCreator = ride.userUid == userId
+                    val isRiderJoined = ride.joinedRiders?.containsKey(userId) == true
+
+                    if (isRideCreator || isRiderJoined) {
                         binding.joinRideBtn.visibility = View.GONE
+                        binding.previewRideBtn.visibility = View.VISIBLE
+                        binding.startRouteBtn.visibility = View.VISIBLE
                     } else {
                         binding.joinRideBtn.visibility = View.VISIBLE
+                        binding.previewRideBtn.visibility = View.VISIBLE
+                        binding.startRouteBtn.visibility = View.GONE
                     }
 
                     firestore.collection("users").document(userId).get()
                         .addOnSuccessListener { userDoc ->
                             val currentJoinedRide = userDoc.getString("currentJoinedRide")
-                            val isInRide = currentJoinedRide != null && currentJoinedRide != ride.sharedRoutesId
-                            binding.joinRideBtn.isEnabled = !isInRide
-                            binding.joinRideBtn.alpha = if (isInRide) 0.5f else 1.0f // Gray out when disabled
+                            val canJoin = currentJoinedRide.isNullOrEmpty()
+                            // Keep it enabled so the user can click it to see the feedback Toast
+                            binding.joinRideBtn.isEnabled = true
+                            binding.joinRideBtn.alpha = if (canJoin) 1.0f else 0.5f
                         }
                         .addOnFailureListener { e ->
                             Log.e(TAG, "Error checking currentJoinedRide: ${e.message}")
-                            binding.joinRideBtn.isEnabled = false
-                            binding.joinRideBtn.alpha = 0.5f
+                            binding.joinRideBtn.isEnabled = true
                         }
                 }
 
-                // Preview Ride button
-                binding.previewRideBtn.setOnClickListener {
+                // Define preview action
+                val openPreview = {
                     val intent = Intent(context, PreviewRideActivity::class.java).apply {
                         putExtra("ride_datetime", ride.datetime?.toDate()?.time ?: 0L)
                         putExtra("ride_destination", ride.destination)
@@ -162,13 +160,19 @@ class SharedRidesFragment : Fragment() {
                     startActivity(intent)
                 }
 
+                // Make the whole card clickable
+                binding.root.setOnClickListener { openPreview() }
+
+                // Preview Ride button
+                binding.previewRideBtn.setOnClickListener { openPreview() }
+
                 // Join Ride button
                 binding.joinRideBtn.setOnClickListener {
                     auth.currentUser?.uid?.let { userId ->
                         firestore.collection("users").document(userId).get()
                             .addOnSuccessListener { userDoc ->
                                 val currentJoinedRide = userDoc.getString("currentJoinedRide")
-                                if (currentJoinedRide != null && currentJoinedRide != ride.sharedRoutesId) {
+                                if (!currentJoinedRide.isNullOrEmpty()) {
                                     android.widget.Toast.makeText(
                                         requireContext(),
                                         "You must finish or quit your current ride before joining a new one",
@@ -186,6 +190,37 @@ class SharedRidesFragment : Fragment() {
                                     android.widget.Toast.LENGTH_SHORT
                                 ).show()
                             }
+                    }
+                }
+
+                // Start Route button
+                binding.startRouteBtn.setOnClickListener {
+                    val destLat = ride.destinationCoordinates?.get("latitude")
+                    val destLng = ride.destinationCoordinates?.get("longitude")
+
+                    if (destLat != null && destLng != null) {
+                        val originLat = ride.originCoordinates?.get("latitude")
+                        val originLng = ride.originCoordinates?.get("longitude")
+
+                        val uriString = if (originLat != null && originLng != null) {
+                            "http://maps.google.com/maps?saddr=${originLat},${originLng}&daddr=${destLat},${destLng}"
+                        } else {
+                            "http://maps.google.com/maps?daddr=${destLat},${destLng}"
+                        }
+                        
+                        val gmmIntentUri = Uri.parse(uriString)
+                        val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
+                        mapIntent.setPackage("com.google.android.apps.maps")
+                        
+                        if (mapIntent.resolveActivity(requireContext().packageManager) != null) {
+                            startActivity(mapIntent)
+                        } else {
+                             // If Google Maps is not installed, open the URI in a browser
+                            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(uriString))
+                            startActivity(browserIntent)
+                        }
+                    } else {
+                        android.widget.Toast.makeText(requireContext(), "Destination not set for this ride.", android.widget.Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -231,7 +266,7 @@ class SharedRidesFragment : Fragment() {
                         firestore.collection("users").document(currentUser.uid)
                             .update("currentJoinedRide", rideId)
                             .addOnSuccessListener {
-                                Log.d(TAG, "Successfully joined ride $rideId")
+                                Log.d(TAG, "Successfully joined ride ${rideId}")
                                 android.widget.Toast.makeText(requireContext(), "Joined ride successfully", android.widget.Toast.LENGTH_SHORT).show()
                             }
                             .addOnFailureListener { e ->

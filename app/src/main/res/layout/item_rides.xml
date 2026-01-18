@@ -71,8 +71,8 @@
             android:text="Name"
             android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
             app:layout_constraintTop_toBottomOf="@id/user_status_container"
-            app:layout_constraintStart_toEndOf="@id/profile_picture"
-            app:layout_constraintEnd_toEndOf="parent" />
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@id/profile_picture" />
 
         <TextView
             android:id="@+id/date_created"
@@ -227,7 +227,7 @@
                 android:id="@+id/join_ride_btn"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:backgroundTint="@color/quit"
+                android:backgroundTint="@color/green"
                 android:contentDescription="Join Ride"
                 android:text="Join Ride"
                 android:textSize="12sp"
@@ -236,6 +236,54 @@
                 app:icon="@drawable/ic_join_ride"
                 app:iconSize="16dp"
                 app:iconPadding="4dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/leave_ride_btn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:backgroundTint="@color/quit"
+                android:contentDescription="Leave Ride"
+                android:text="Leave"
+                android:textSize="12sp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:visibility="gone"
+                app:icon="@drawable/ic_exit"
+                app:iconSize="16dp"
+                app:iconPadding="4dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/start_route_btn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:backgroundTint="@color/green"
+                android:contentDescription="Start Route"
+                android:text="Start Route"
+                android:textSize="12sp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:visibility="gone"
+                app:icon="@drawable/ic_route"
+                app:iconSize="16dp"
+                app:iconPadding="4dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/arrived_btn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:backgroundTint="@color/blue"
+                android:contentDescription="Arrived"
+                android:text="Arrived"
+                android:textSize="12sp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:visibility="gone"
+                app:icon="@drawable/ic_checkmark"
+                app:iconSize="16dp"
+                app:iconPadding="4dp" />
+
         </LinearLayout>
 
     </androidx.constraintlayout.widget.ConstraintLayout>
