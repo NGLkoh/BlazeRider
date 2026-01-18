@@ -102,6 +102,7 @@
         <activity android:name=".PreviewRideActivity" />
 
         <activity android:name=".EditProfileActivity"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.Material3.DynamicColors.Light.NoActionBar"
             />
         <activity android:name=".ChangePasswordActivity"

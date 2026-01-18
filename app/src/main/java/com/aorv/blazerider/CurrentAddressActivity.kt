@@ -2,7 +2,6 @@ package com.aorv.blazerider
 
 import android.content.Intent
 import android.os.Bundle
-import android.view.View
 import android.view.WindowManager
 import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
@@ -72,24 +71,41 @@ class CurrentAddressActivity : AppCompatActivity() {
         fetchProvinces()
 
         // Province dropdown listener
-        stateDropdown.setOnItemClickListener { _, _, position, _ ->
-            selectedProvinceCode = provinces[position].second
-            cityDropdown.isEnabled = true
-            cities.clear()
-            barangays.clear()
-            cityDropdown.setText("")
-            barangayDropdown.setText("")
-            barangayDropdown.isEnabled = false
-            fetchCities(selectedProvinceCode!!)
+        stateDropdown.setOnItemClickListener { parent, _, position, _ ->
+            val selectedName = parent.getItemAtPosition(position) as String
+            selectedProvinceCode = provinces.find { it.first == selectedName }?.second
+            
+            if (selectedProvinceCode != null) {
+                cityDropdown.isEnabled = true
+                cities.clear()
+                barangays.clear()
+                cityDropdown.setText("")
+                barangayDropdown.setText("")
+                barangayDropdown.isEnabled = false
+                
+                // Reset adapters
+                cityDropdown.setAdapter(null)
+                barangayDropdown.setAdapter(null)
+                
+                fetchCities(selectedProvinceCode!!)
+            }
         }
 
         // City dropdown listener
-        cityDropdown.setOnItemClickListener { _, _, position, _ ->
-            selectedCityCode = cities[position].second
-            barangayDropdown.isEnabled = true
-            barangays.clear()
-            barangayDropdown.setText("")
-            fetchBarangays(selectedProvinceCode!!, selectedCityCode!!)
+        cityDropdown.setOnItemClickListener { parent, _, position, _ ->
+            val selectedName = parent.getItemAtPosition(position) as String
+            selectedCityCode = cities.find { it.first == selectedName }?.second
+            
+            if (selectedCityCode != null) {
+                barangayDropdown.isEnabled = true
+                barangays.clear()
+                barangayDropdown.setText("")
+                
+                // Reset adapter
+                barangayDropdown.setAdapter(null)
+                
+                fetchBarangays(selectedCityCode!!)
+            }
         }
 
         // Next button
@@ -124,7 +140,7 @@ class CurrentAddressActivity : AppCompatActivity() {
                         .setValue(status)
 
                     Toast.makeText(this, "Address saved", Toast.LENGTH_SHORT).show()
-                    // Proceed to next activity (placeholder)
+                    // Proceed to next activity
                     startActivity(Intent(this, AdminApprovalActivity::class.java))
                     overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
                     finish()
@@ -143,16 +159,23 @@ class CurrentAddressActivity : AppCompatActivity() {
             Request.Method.GET, url, null,
             { response ->
                 provinces.clear()
+                val tempProvinces = mutableListOf<Pair<String, String>>()
                 for (i in 0 until response.length()) {
                     val province = response.getJSONObject(i)
                     val name = province.getString("name")
                     val code = province.getString("code")
-                    provinces.add(name to code)
+                    tempProvinces.add(name to code)
                 }
+                
+                // Add Metro Manila (NCR) manually as it is not technically a province but is required for addresses
+                tempProvinces.add("Metro Manila" to "130000000")
+                
+                // Sort provinces alphabetically
+                provinces.addAll(tempProvinces.sortedBy { it.first })
+                
                 val provinceNames = provinces.map { it.first }
-                stateDropdown.setAdapter(
-                    ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, provinceNames)
-                )
+                val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, provinceNames)
+                stateDropdown.setAdapter(adapter)
             },
             { error ->
                 Toast.makeText(this, "Failed to fetch provinces: ${error.message}", Toast.LENGTH_SHORT).show()
@@ -164,22 +187,31 @@ class CurrentAddressActivity : AppCompatActivity() {
 
     private fun fetchCities(provinceCode: String) {
         val queue = Volley.newRequestQueue(this)
-        val url = "https://psgc.gitlab.io/api/provinces/$provinceCode/cities-municipalities"
+        // If Metro Manila (NCR), use regions endpoint to get cities, otherwise use provinces endpoint
+        val url = if (provinceCode == "130000000") {
+            "https://psgc.gitlab.io/api/regions/130000000/cities-municipalities"
+        } else {
+            "https://psgc.gitlab.io/api/provinces/$provinceCode/cities-municipalities"
+        }
 
         val jsonArrayRequest = JsonArrayRequest(
             Request.Method.GET, url, null,
             { response ->
                 cities.clear()
+                val tempCities = mutableListOf<Pair<String, String>>()
                 for (i in 0 until response.length()) {
                     val city = response.getJSONObject(i)
                     val name = city.getString("name")
                     val code = city.getString("code")
-                    cities.add(name to code)
+                    tempCities.add(name to code)
                 }
+                
+                // Sort cities alphabetically
+                cities.addAll(tempCities.sortedBy { it.first })
+                
                 val cityNames = cities.map { it.first }
-                cityDropdown.setAdapter(
-                    ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, cityNames)
-                )
+                val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, cityNames)
+                cityDropdown.setAdapter(adapter)
             },
             { error ->
                 Toast.makeText(this, "Failed to fetch cities: ${error.message}", Toast.LENGTH_SHORT).show()
@@ -190,26 +222,27 @@ class CurrentAddressActivity : AppCompatActivity() {
         queue.add(jsonArrayRequest)
     }
 
-    private fun fetchBarangays(provinceCode: String, cityCode: String) {
+    private fun fetchBarangays(cityCode: String) {
         val queue = Volley.newRequestQueue(this)
-        val url = "https://psgc.gitlab.io/api/provinces/$provinceCode/barangays"
+        // Use the specific city-municipality endpoint for more accurate and efficient fetching
+        val url = "https://psgc.gitlab.io/api/cities-municipalities/$cityCode/barangays"
 
         val jsonArrayRequest = JsonArrayRequest(
             Request.Method.GET, url, null,
             { response ->
                 barangays.clear()
+                val tempBarangays = mutableListOf<String>()
                 for (i in 0 until response.length()) {
                     val barangay = response.getJSONObject(i)
-                    val cityCodeFromJson = barangay.optString("cityCode", "")
-                    val municipalityCode = barangay.optString("municipalityCode", "")
-                    if (cityCodeFromJson == cityCode || municipalityCode == cityCode) {
-                        val name = barangay.getString("name")
-                        barangays.add(name)
-                    }
+                    val name = barangay.getString("name")
+                    tempBarangays.add(name)
                 }
-                barangayDropdown.setAdapter(
-                    ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, barangays)
-                )
+                
+                // Sort barangays alphabetically
+                barangays.addAll(tempBarangays.sorted())
+                
+                val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, barangays)
+                barangayDropdown.setAdapter(adapter)
             },
             { error ->
                 Toast.makeText(this, "Failed to fetch barangays: ${error.message}", Toast.LENGTH_SHORT).show()

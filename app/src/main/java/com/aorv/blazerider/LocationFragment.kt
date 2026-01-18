@@ -120,7 +120,7 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
     private lateinit var geoFire: GeoFire
     private lateinit var locationViewModel: LocationViewModel
 
-    private var cityName: String = "Current Location"
+    private var currentCityName: String = "Current Location"
 
     companion object {
         private var hasShownWelcomeDialog = false
@@ -322,7 +322,7 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
             if (currentLocation == null || selectedPlaceName == null) return@setOnClickListener
             CoroutineScope(Dispatchers.Main).launch {
                 try {
-                    val origin = if (cityName == "Current Location") reverseGeocodeFallback(currentLocation!!.latitude, currentLocation!!.longitude) else cityName
+                    val originAddress = reverseGeocodeFallback(currentLocation!!.latitude, currentLocation!!.longitude)
                     val document = firestore.collection("users").document(userId).get().await()
                     if (document.exists()) {
                         val name = "${document.getString("firstName")} ${document.getString("lastName")}".trim()
@@ -330,7 +330,7 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
                             "datetime" to FieldValue.serverTimestamp(), "destination" to selectedPlaceName,
                             "destinationCoordinates" to mapOf("latitude" to selectedPlaceLat, "longitude" to selectedPlaceLng),
                             "distance" to (routeDistance?.replace(" km", "")?.toDoubleOrNull() ?: 0.0),
-                            "duration" to parseDurationToSeconds(routeDuration!!), "origin" to origin,
+                            "duration" to parseDurationToSeconds(routeDuration!!), "origin" to originAddress,
                             "originCoordinates" to mapOf("latitude" to currentLocation!!.latitude, "longitude" to currentLocation!!.longitude),
                             "userName" to name, "userUid" to userId
                         )
@@ -411,8 +411,8 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
                 val weather = jsonObject.getJSONArray("weather").getJSONObject(0)
                 val desc = weather.getString("description").replaceFirstChar { it.uppercase() }
                 val temp = jsonObject.getJSONObject("main").getDouble("temp")
-                cityName = jsonObject.getString("name").ifEmpty { "Unknown" }
-                val msg = "Location: $cityName ($lat, $lng)\nWeather: $desc, Temp: ${String.format("%.1f", temp)}°C"
+                currentCityName = jsonObject.getString("name").ifEmpty { "Unknown" }
+                val msg = "Location: $currentCityName ($lat, $lng)\nWeather: $desc, Temp: ${String.format("%.1f", temp)}°C"
                 withContext(Dispatchers.Main) { sendNotification("Weather Update", msg) }
                 saveNotificationToFirestore(msg, jsonObject, lat, lng)
             } catch (e: Exception) { Log.e("Weather", "Error: ${e.message}") }

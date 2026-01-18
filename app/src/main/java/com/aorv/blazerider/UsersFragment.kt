@@ -54,9 +54,13 @@ class UsersFragment : Fragment() {
         }
 
         // Setup RecyclerView
-        userAdapter = UserAdapter(userRequestList, requireContext(), showPending) { user ->
-            confirmUser(user)
-        }
+        userAdapter = UserAdapter(
+            userRequestList, 
+            requireContext(), 
+            showPending,
+            onConfirmClick = { user -> confirmUser(user) },
+            onRejectClick = { user -> rejectUser(user) }
+        )
         recyclerView.layoutManager = LinearLayoutManager(context)
         recyclerView.adapter = userAdapter
 
@@ -112,6 +116,7 @@ class UsersFragment : Fragment() {
                 filterUsers(searchBar.text.toString())
             }
     }
+
     private fun confirmUser(user: UserRequest) {
         db.collection("users").document(user.userId ?: return)
             .update(
@@ -125,6 +130,17 @@ class UsersFragment : Fragment() {
             }
             .addOnFailureListener {
                 Toast.makeText(context, "Error confirming user", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    private fun rejectUser(user: UserRequest) {
+        db.collection("users").document(user.userId ?: return)
+            .delete()
+            .addOnSuccessListener {
+                Toast.makeText(context, "User rejected and removed", Toast.LENGTH_SHORT).show()
+            }
+            .addOnFailureListener {
+                Toast.makeText(context, "Error rejecting user", Toast.LENGTH_SHORT).show()
             }
     }
 

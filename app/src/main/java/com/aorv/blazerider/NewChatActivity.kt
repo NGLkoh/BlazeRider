@@ -20,15 +20,6 @@ import java.io.Serializable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-data class Contact(
-    val id: String,
-    val firstName: String,
-    val lastName: String,
-    val profileImageUrl: String?,
-    val email: String? = null,
-    val lastActive: String? = null
-) : Serializable
-
 class ContactAdapter(private val onContactClick: (Contact) -> Unit) : RecyclerView.Adapter<ContactAdapter.ViewHolder>() {
     private val contacts = mutableListOf<Contact>()
     private val filteredContacts = mutableListOf<Contact>()

@@ -12,12 +12,11 @@ import com.google.firebase.firestore.FirebaseFirestore
 
 class UserAdapter(
     private var userList: MutableList<UserRequest>,
-    private val context: Context, // Renamed from 'showPending1' for clarity
+    private val context: Context,
     private var showPending: Boolean,
-    private val onConfirmClick: (UserRequest) -> Unit
+    private val onConfirmClick: (UserRequest) -> Unit,
+    private val onRejectClick: (UserRequest) -> Unit
 ) : RecyclerView.Adapter<UserAdapter.UserViewHolder>() {
-
-    private val db = FirebaseFirestore.getInstance()
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): UserViewHolder {
         val view = LayoutInflater.from(parent.context).inflate(R.layout.item_user, parent, false)
@@ -29,7 +28,7 @@ class UserAdapter(
 
         // Set user details
         holder.tvName.text = "${user.firstName.orEmpty()} ${user.lastName.orEmpty()}"
-        holder.tvEmail.text = user.email.orEmpty() // Added: Bind email from UserRequest.email
+        holder.tvEmail.text = user.email.orEmpty()
         holder.tvDetails.text = "Gender: ${when {
             user.gender?.equals("Male", ignoreCase = true) == true -> "♂️"
             user.gender?.equals("Female", ignoreCase = true) == true -> "♀️"
@@ -43,6 +42,10 @@ class UserAdapter(
             text = if (user.isVerified) "Confirmed" else "Confirm"
             visibility = if (user.isVerified && !showPending) View.GONE else View.VISIBLE
         }
+        
+        holder.btnReject.apply {
+            visibility = if (showPending && !user.isVerified) View.VISIBLE else View.GONE
+        }
 
         // Handle confirm button click
         holder.btnConfirm.setOnClickListener {
@@ -53,6 +56,18 @@ class UserAdapter(
                     onConfirmClick(user)
                 }
                 .setNegativeButton("No") { dialog, _ -> dialog.dismiss() }
+                .show()
+        }
+
+        // Handle reject button click
+        holder.btnReject.setOnClickListener {
+            AlertDialog.Builder(holder.itemView.context)
+                .setTitle("Reject User")
+                .setMessage("Are you sure you want to reject and remove this user from the database? This action cannot be undone.")
+                .setPositiveButton("Reject") { _, _ ->
+                    onRejectClick(user)
+                }
+                .setNegativeButton("Cancel") { dialog, _ -> dialog.dismiss() }
                 .show()
         }
     }
@@ -67,9 +82,10 @@ class UserAdapter(
 
     class UserViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val tvName: TextView = itemView.findViewById(R.id.tvName)
-        val tvEmail: TextView = itemView.findViewById(R.id.tvEmail) // Added: tvEmail binding
+        val tvEmail: TextView = itemView.findViewById(R.id.tvEmail)
         val tvDetails: TextView = itemView.findViewById(R.id.tvDetails)
         val tvStatus: TextView = itemView.findViewById(R.id.tvStatus)
         val btnConfirm: Button = itemView.findViewById(R.id.btnConfirm)
+        val btnReject: Button = itemView.findViewById(R.id.btnReject)
     }
 }

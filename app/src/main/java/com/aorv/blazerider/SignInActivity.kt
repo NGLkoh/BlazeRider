@@ -107,7 +107,7 @@ class SignInActivity : AppCompatActivity() {
                                 overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
                                 finish()
                             } else {
-                                Toast.makeText(this, "User data not found.", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(this, "User not registered. Please Sign Up to login", Toast.LENGTH_SHORT).show()
                             }
                         }
                         .addOnFailureListener { e ->

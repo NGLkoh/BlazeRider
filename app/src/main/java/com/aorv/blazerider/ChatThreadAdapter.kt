@@ -1,6 +1,5 @@
 package com.aorv.blazerider
 
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -20,15 +19,15 @@ import java.util.*
 
 class ChatThreadAdapter(private val onChatClick: (Chat) -> Unit) : ListAdapter<Chat, ChatThreadAdapter.ViewHolder>(ChatDiffCallback()) {
 
-    private val statusListeners = mutableMapOf<String, ValueEventListener>() // chatId -> Listener
+    private val statusListeners = mutableMapOf<String, Pair<String, ValueEventListener>>() // chatId -> <userId, Listener>
 
     class ViewHolder(itemView: View, private val onClick: (Chat) -> Unit) : RecyclerView.ViewHolder(itemView) {
-        val chatName: TextView = itemView.findViewById(R.id.chat_name)
-        val chatImage: ImageView = itemView.findViewById(R.id.chat_image)
-        val chatLastMessage: TextView = itemView.findViewById(R.id.chat_last_message)
-        val chatTimestamp: TextView = itemView.findViewById(R.id.chat_timestamp)
-        val activeStatusDot: View = itemView.findViewById(R.id.active_status_dot)
-        val unreadCount: TextView = itemView.findViewById(R.id.unread_count)
+        private val chatName: TextView = itemView.findViewById(R.id.chat_name)
+        private val chatImage: ImageView = itemView.findViewById(R.id.chat_image)
+        private val chatLastMessage: TextView = itemView.findViewById(R.id.chat_last_message)
+        private val chatTimestamp: TextView = itemView.findViewById(R.id.chat_timestamp)
+        private val activeStatusDot: View = itemView.findViewById(R.id.active_status_dot)
+        private val unreadCount: TextView = itemView.findViewById(R.id.unread_count)
 
         fun bind(chat: Chat, adapter: ChatThreadAdapter) {
             chatName.text = chat.name.ifEmpty { "User" }
@@ -53,10 +52,10 @@ class ChatThreadAdapter(private val onChatClick: (Chat) -> Unit) : ListAdapter<C
             if (chat.type == "p2p" && chat.contact?.id != null) {
                 val userId = chat.contact.id
                 
-                // Remove existing listener for this specific chat if any
-                adapter.statusListeners[chat.chatId]?.let {
-                    FirebaseDatabase.getInstance().reference.child("status").child(userId).child("state")
-                        .removeEventListener(it)
+                // Remove existing listener for this specific chat if it's for a different user
+                adapter.statusListeners[chat.chatId]?.let { (oldUserId, oldListener) ->
+                    FirebaseDatabase.getInstance().reference.child("status").child(oldUserId).child("state")
+                        .removeEventListener(oldListener)
                 }
 
                 val statusListener = object : ValueEventListener {
@@ -71,7 +70,7 @@ class ChatThreadAdapter(private val onChatClick: (Chat) -> Unit) : ListAdapter<C
                 
                 FirebaseDatabase.getInstance().reference.child("status").child(userId).child("state")
                     .addValueEventListener(statusListener)
-                adapter.statusListeners[chat.chatId] = statusListener
+                adapter.statusListeners[chat.chatId] = userId to statusListener
             } else {
                 activeStatusDot.visibility = View.GONE
             }
@@ -104,13 +103,6 @@ class ChatThreadAdapter(private val onChatClick: (Chat) -> Unit) : ListAdapter<C
         holder.bind(getItem(position), this)
     }
 
-    override fun onViewRecycled(holder: ViewHolder) {
-        super.onViewRecycled(holder)
-        // We don't necessarily want to remove listeners here if they are chat-specific and not position-specific
-        // But for memory efficiency, if the view is not visible, we could. 
-        // However, with ListAdapter, it's better to manage these in a way that doesn't leak.
-    }
-
     fun getChatAt(position: Int): Chat = getItem(position)
 
     fun updateChats(newChats: List<Chat>) {
@@ -118,10 +110,10 @@ class ChatThreadAdapter(private val onChatClick: (Chat) -> Unit) : ListAdapter<C
     }
 
     fun clearListeners() {
-        statusListeners.forEach { (chatId, listener) ->
-            // Note: This requires knowing the userId, which we don't have here easily without the chat object.
-            // A better way is to store userId in the map or just remove all by path if possible, 
-            // but Firebase doesn't support "remove all listeners" easily without references.
+        statusListeners.forEach { (_, pair) ->
+            val (userId, listener) = pair
+            FirebaseDatabase.getInstance().reference.child("status").child(userId).child("state")
+                .removeEventListener(listener)
         }
         statusListeners.clear()
     }
