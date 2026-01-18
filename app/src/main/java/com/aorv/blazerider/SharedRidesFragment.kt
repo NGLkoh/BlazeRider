@@ -61,8 +61,8 @@ class SharedRidesFragment : Fragment() {
                     }
                 } ?: emptyList()
                 
-                // Hide completed rides from the shared feed
-                val visibleRides = rides.filter { it.status != "completed" }
+                // Hide completed and cancelled rides from the shared feed
+                val visibleRides = rides.filter { it.status != "completed" && it.status != "cancelled" }
                 adapter.submitList(visibleRides)
             }
     }
@@ -251,32 +251,55 @@ class SharedRidesFragment : Fragment() {
             private fun joinRide(ride: SharedRide) {
                 val currentUser = auth.currentUser ?: return
                 val rideId = ride.sharedRoutesId ?: return
-                val joinedRiderData = mapOf(
-                    "joinedRiders.${currentUser.uid}" to mapOf(
-                        "timestamp" to Timestamp.now(),
-                        "status" to "confirmed"
-                    )
-                )
+                
+                firestore.collection("users").document(currentUser.uid).get()
+                    .addOnSuccessListener { userDoc ->
+                        val firstName = userDoc.getString("firstName") ?: ""
+                        val lastName = userDoc.getString("lastName") ?: ""
+                        val joinerName = "$firstName $lastName".trim()
 
-                // Update sharedRoutes/{sharedRoutesId}/joinedRiders
-                firestore.collection("sharedRoutes").document(rideId)
-                    .update(joinedRiderData)
-                    .addOnSuccessListener {
-                        // Update users/{userId}/currentJoinedRide
-                        firestore.collection("users").document(currentUser.uid)
-                            .update("currentJoinedRide", rideId)
+                        val joinedRiderData = mapOf(
+                            "joinedRiders.${currentUser.uid}" to mapOf(
+                                "timestamp" to Timestamp.now(),
+                                "status" to "confirmed"
+                            )
+                        )
+
+                        // Update sharedRoutes/{sharedRoutesId}/joinedRiders
+                        firestore.collection("sharedRoutes").document(rideId)
+                            .update(joinedRiderData)
                             .addOnSuccessListener {
-                                Log.d(TAG, "Successfully joined ride ${rideId}")
-                                android.widget.Toast.makeText(requireContext(), "Joined ride successfully", android.widget.Toast.LENGTH_SHORT).show()
+                                // Update users/{userId}/currentJoinedRide
+                                firestore.collection("users").document(currentUser.uid)
+                                    .update("currentJoinedRide", rideId)
+                                    .addOnSuccessListener {
+                                        Log.d(TAG, "Successfully joined ride ${rideId}")
+                                        android.widget.Toast.makeText(requireContext(), "Joined ride successfully", android.widget.Toast.LENGTH_SHORT).show()
+                                        
+                                        // Send notification to the ride creator
+                                        if (!ride.userUid.isNullOrEmpty()) {
+                                            val notification = Notification(
+                                                actorId = currentUser.uid,
+                                                createdAt = Timestamp.now(),
+                                                entityId = rideId,
+                                                entityType = "ride",
+                                                message = "$joinerName joined your ride from ${ride.origin} to ${ride.destination}",
+                                                type = "ride_join",
+                                                updatedAt = Timestamp.now()
+                                            )
+                                            firestore.collection("users").document(ride.userUid)
+                                                .collection("notifications").add(notification)
+                                        }
+                                    }
+                                    .addOnFailureListener { e ->
+                                        Log.e(TAG, "Error updating currentJoinedRide: ${e.message}")
+                                        android.widget.Toast.makeText(requireContext(), "Failed to join ride: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
                             }
                             .addOnFailureListener { e ->
-                                Log.e(TAG, "Error updating currentJoinedRide: ${e.message}")
+                                Log.e(TAG, "Error joining ride: ${e.message}")
                                 android.widget.Toast.makeText(requireContext(), "Failed to join ride: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
                             }
-                    }
-                    .addOnFailureListener { e ->
-                        Log.e(TAG, "Error joining ride: ${e.message}")
-                        android.widget.Toast.makeText(requireContext(), "Failed to join ride: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
                     }
             }
         }

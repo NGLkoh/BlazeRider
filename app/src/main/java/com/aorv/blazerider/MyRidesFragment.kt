@@ -69,7 +69,7 @@ class MyRidesFragment : Fragment() {
                 // Only show rides that are not completed and where the user is either the creator or a joiner
                 val myRides = allRides.filter { ride ->
                     (ride.userUid == userId || ride.joinedRiders?.containsKey(userId) == true) &&
-                    ride.status != "completed"
+                    ride.status != "completed" && ride.status != "cancelled"
                 }
 
                 adapter.submitList(myRides)
@@ -129,10 +129,12 @@ class MyRidesFragment : Fragment() {
                     binding.startRouteBtn.visibility = View.VISIBLE
                     binding.arrivedBtn.visibility = View.VISIBLE
                     binding.leaveRideBtn.visibility = View.GONE
+                    binding.cancelRideBtn.visibility = View.VISIBLE
                 } else {
                     binding.startRouteBtn.visibility = View.VISIBLE
                     binding.arrivedBtn.visibility = View.VISIBLE
                     binding.leaveRideBtn.visibility = View.VISIBLE
+                    binding.cancelRideBtn.visibility = View.GONE
                 }
 
                 // Auto-check for arrival
@@ -194,6 +196,10 @@ class MyRidesFragment : Fragment() {
                 binding.leaveRideBtn.setOnClickListener {
                     showLeaveConfirmationDialog(ride)
                 }
+
+                binding.cancelRideBtn.setOnClickListener {
+                    showCancelConfirmationDialog(ride)
+                }
             }
 
             private fun showArrivalConfirmationDialog(ride: SharedRide, isRideCreator: Boolean) {
@@ -215,6 +221,17 @@ class MyRidesFragment : Fragment() {
                         leaveRide(ride)
                     }
                     .setNegativeButton("Cancel", null)
+                    .show()
+            }
+
+            private fun showCancelConfirmationDialog(ride: SharedRide) {
+                MaterialAlertDialogBuilder(requireContext())
+                    .setTitle("Cancel Ride")
+                    .setMessage("Are you sure you want to cancel this ride? This will notify all joined riders.")
+                    .setPositiveButton("Cancel Ride") { _, _ ->
+                        cancelRide(ride)
+                    }
+                    .setNegativeButton("Keep Ride", null)
                     .show()
             }
 
@@ -286,6 +303,52 @@ class MyRidesFragment : Fragment() {
                     Log.e(TAG, "Error leaving ride: ${e.message}")
                     if (isAdded) {
                         Toast.makeText(requireContext(), "Failed to leave ride", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+
+            private fun cancelRide(ride: SharedRide) {
+                val userId = auth.currentUser?.uid ?: return
+                val rideId = ride.sharedRoutesId ?: return
+
+                firestore.runTransaction { transaction ->
+                    val rideRef = firestore.collection("sharedRoutes").document(rideId)
+                    val userRef = firestore.collection("users").document(userId)
+                    
+                    // Mark ride as cancelled
+                    transaction.update(rideRef, "status", "cancelled")
+                    
+                    // Clear creator's currentJoinedRide
+                    transaction.update(userRef, "currentJoinedRide", null)
+                    
+                    // Clear currentJoinedRide for all joined riders and notify them
+                    ride.joinedRiders?.keys?.forEach { riderId ->
+                        val riderRef = firestore.collection("users").document(riderId)
+                        transaction.update(riderRef, "currentJoinedRide", null)
+                        
+                        // Add notification for each rider
+                        val notificationRef = firestore.collection("users").document(riderId)
+                            .collection("notifications").document()
+                        val notification = mapOf(
+                            "actorId" to userId,
+                            "createdAt" to Timestamp.now(),
+                            "entityId" to rideId,
+                            "entityType" to "ride",
+                            "message" to "The ride from ${ride.origin} to ${ride.destination} has been cancelled by the creator.",
+                            "type" to "ride_cancelled",
+                            "isRead" to false,
+                            "updatedAt" to Timestamp.now()
+                        )
+                        transaction.set(notificationRef, notification)
+                    }
+                }.addOnSuccessListener {
+                    if (isAdded) {
+                        Toast.makeText(requireContext(), "Ride cancelled successfully", Toast.LENGTH_SHORT).show()
+                    }
+                }.addOnFailureListener { e ->
+                    Log.e(TAG, "Error cancelling ride: ${e.message}")
+                    if (isAdded) {
+                        Toast.makeText(requireContext(), "Failed to cancel ride", Toast.LENGTH_SHORT).show()
                     }
                 }
             }

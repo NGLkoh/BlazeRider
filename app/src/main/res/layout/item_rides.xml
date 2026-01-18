@@ -254,6 +254,22 @@
                 app:iconPadding="4dp" />
 
             <com.google.android.material.button.MaterialButton
+                android:id="@+id/cancel_ride_btn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:backgroundTint="@color/quit"
+                android:contentDescription="Cancel Ride"
+                android:text="Cancel"
+                android:textSize="12sp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:visibility="gone"
+                app:icon="@drawable/ic_close"
+                app:iconSize="16dp"
+                app:iconPadding="4dp" />
+
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/start_route_btn"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
