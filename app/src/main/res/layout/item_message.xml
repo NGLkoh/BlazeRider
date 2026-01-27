@@ -34,6 +34,7 @@
         android:id="@+id/message_row"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:gravity="start"
         android:orientation="horizontal">
 
         <com.google.android.material.imageview.ShapeableImageView
@@ -48,11 +49,10 @@
 
         <LinearLayout
             android:id="@+id/message_content_wrapper"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="horizontal"
-            android:paddingHorizontal="4dp">
+            android:orientation="vertical"
+            android:maxWidth="280dp">
 
             <TextView
                 android:id="@+id/message_text"
@@ -75,18 +75,20 @@
                 android:visibility="gone"
                 android:contentDescription="Message Image" />
 
+            <!-- ✅ TIMESTAMP INSIDE BUBBLE -->
+            <TextView
+                android:id="@+id/timestamp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:textColor="@android:color/darker_gray"
+                android:layout_marginTop="4dp"
+                android:layout_marginEnd="8dp"
+                android:layout_marginStart="8dp"
+                android:gravity="end" />
+
         </LinearLayout>
 
     </LinearLayout>
-
-    <TextView
-        android:id="@+id/timestamp"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:textSize="12sp"
-        android:textColor="@android:color/darker_gray"
-        android:layout_marginStart="12dp"
-        android:layout_marginEnd="12dp"
-        android:layout_marginTop="4dp" />
 
 </LinearLayout>

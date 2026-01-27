@@ -40,7 +40,7 @@ import java.util.Date
 class HomeActivity : AppCompatActivity() {
 
     private var lastClickTime: Long = 0
-    private val debounceDelay: Long = 500 // 500ms debounce period
+    private val debounceDelay: Long = 500
     private lateinit var auth: FirebaseAuth
     private lateinit var db: FirebaseFirestore
     private lateinit var fusedLocationClient: FusedLocationProviderClient
@@ -50,7 +50,7 @@ class HomeActivity : AppCompatActivity() {
     private var messageListener: ListenerRegistration? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    // Notification Banner
+    // Notification Banner UI
     private lateinit var notificationBanner: CardView
     private lateinit var notificationTitle: TextView
     private lateinit var notificationMessage: TextView
@@ -66,6 +66,8 @@ class HomeActivity : AppCompatActivity() {
         locationViewModel = ViewModelProvider(this)[LocationViewModel::class.java]
 
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_navigation)
+
+        // Initialize Notification Banner Views
         notificationBanner = findViewById(R.id.notification_banner)
         notificationTitle = notificationBanner.findViewById(R.id.notification_title)
         notificationMessage = notificationBanner.findViewById(R.id.notification_message)
@@ -75,20 +77,13 @@ class HomeActivity : AppCompatActivity() {
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { view, windowInsets ->
             val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-
             notificationBanner.updateLayoutParams<ViewGroup.MarginLayoutParams> {
                 topMargin = insets.top
             }
-
             val fragmentContainer = findViewById<FrameLayout>(R.id.fragment_container)
             fragmentContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                if (isStatusBarTransparent()) {
-                    topMargin = 0
-                } else {
-                    topMargin = insets.top
-                }
+                topMargin = if (isStatusBarTransparent()) 0 else insets.top
             }
-
             WindowInsetsCompat.CONSUMED
         }
 
@@ -139,22 +134,44 @@ class HomeActivity : AppCompatActivity() {
         listenForNewMessages()
     }
 
+    private fun listenForNotifications() {
+        val userId = auth.currentUser?.uid ?: return
+
+        notificationsListener = db.collection("users").document(userId).collection("notifications")
+            .orderBy("createdAt", Query.Direction.DESCENDING).limit(1)
+            .addSnapshotListener { snapshot, e ->
+                if (e != null || snapshot == null || snapshot.isEmpty) return@addSnapshotListener
+
+                val doc = snapshot.documents[0]
+                val type = doc.getString("type") ?: "general"
+                val entityId = doc.getString("entityId")
+                val isRead = doc.getBoolean("isRead") ?: true
+
+                // Corrected: Removed ::binding check because this activity uses findViewById
+                if (!isRead) {
+                    val title = doc.getString("title") ?: "New Notification"
+                    val message = doc.getString("message") ?: ""
+                    showNotificationBanner(title, message, type, entityId)
+                }
+            }
+    }
+
     private fun listenForNewMessages() {
         val userId = auth.currentUser?.uid ?: return
-        
+
         messageListener = db.collection("userChats").document(userId).collection("chats")
             .addSnapshotListener { snapshot, e ->
                 if (e != null || snapshot == null) return@addSnapshotListener
-                
+
                 for (dc in snapshot.documentChanges) {
                     if (dc.type == DocumentChange.Type.MODIFIED) {
                         val unreadCount = dc.document.getLong("unreadCount") ?: 0
                         val lastMessageMap = dc.document.get("lastMessage") as? Map<*, *>
                         val senderId = lastMessageMap?.get("senderId") as? String
-                        
+
                         if (unreadCount > 0 && senderId != userId) {
                             val content = lastMessageMap?.get("content") as? String ?: "New message"
-                            
+
                             if (senderId != null) {
                                 db.collection("users").document(senderId).get().addOnSuccessListener { userDoc ->
                                     val name = "${userDoc.getString("firstName")} ${userDoc.getString("lastName")}".trim()
@@ -172,6 +189,49 @@ class HomeActivity : AppCompatActivity() {
             }
     }
 
+    private fun showNotificationBanner(title: String, message: String, type: String, entityId: String?) {
+        mainHandler.post {
+            if (isFinishing || isDestroyed) return@post
+
+            playNotificationSound()
+
+            notificationTitle.text = title
+            notificationMessage.text = message
+            notificationBanner.visibility = View.VISIBLE
+
+            notificationBanner.setOnClickListener {
+                when (type) {
+                    "message" -> startActivity(Intent(this, MessagesActivity::class.java))
+                    "comment" -> entityId?.let {
+                        startActivity(Intent(this, CommentsActivity::class.java).apply { putExtra("POST_ID", it) })
+                    }
+                    "reaction" -> entityId?.let {
+                        startActivity(Intent(this, SinglePostActivity::class.java).apply { putExtra("POST_ID", it) })
+                    }
+                }
+                notificationBanner.visibility = View.GONE
+            }
+
+            notificationDismiss.setOnClickListener { notificationBanner.visibility = View.GONE }
+
+            mainHandler.removeCallbacksAndMessages("banner_timeout")
+
+// Create the runnable for hiding the banner
+            val hideBannerRunnable = Runnable {
+                if (!isFinishing && !isDestroyed) {
+                    notificationBanner.visibility = View.GONE
+                }
+            }
+
+// Use postAtTime with the token to allow for cancellation
+            mainHandler.postAtTime(
+                hideBannerRunnable,
+                "banner_timeout",
+                SystemClock.uptimeMillis() + 5000
+            )
+        }
+    }
+
     private fun playNotificationSound() {
         try {
             val notification = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
@@ -180,65 +240,6 @@ class HomeActivity : AppCompatActivity() {
         } catch (e: Exception) {
             e.printStackTrace()
         }
-    }
-
-    private fun showNotificationBanner(title: String, message: String, type: String, entityId: String?) {
-        mainHandler.post {
-            if (isFinishing || isDestroyed) return@post
-            
-            playNotificationSound()
-            
-            notificationTitle.text = title
-            notificationMessage.text = message
-            notificationBanner.visibility = View.VISIBLE
-
-            notificationBanner.setOnClickListener {
-                if (type == "message") {
-                    startActivity(Intent(this, MessagesActivity::class.java))
-                } else if (type == "comment" || type == "reaction") {
-                    if (entityId != null) {
-                        val intent = if (type == "comment") {
-                            Intent(this, CommentsActivity::class.java).apply { putExtra("POST_ID", entityId) }
-                        } else {
-                            Intent(this, SinglePostActivity::class.java).apply { putExtra("POST_ID", entityId) }
-                        }
-                        startActivity(intent)
-                    }
-                }
-                notificationBanner.visibility = View.GONE
-            }
-
-            notificationDismiss.setOnClickListener { notificationBanner.visibility = View.GONE }
-            
-            mainHandler.removeCallbacksAndMessages("banner_timeout")
-            mainHandler.postAtTime({
-                if (!isFinishing && !isDestroyed) notificationBanner.visibility = View.GONE
-            }, "banner_timeout", SystemClock.uptimeMillis() + 5000)
-        }
-    }
-
-    private fun listenForNotifications() {
-        val userId = auth.currentUser?.uid ?: return
-        notificationsListener = db.collection("users").document(userId).collection("notifications")
-            .orderBy("createdAt", Query.Direction.DESCENDING).limit(1)
-            .addSnapshotListener { snapshot, e ->
-                if (e != null || snapshot == null || snapshot.isEmpty) return@addSnapshotListener
-                if (snapshot.metadata.hasPendingWrites()) return@addSnapshotListener
-
-                val doc = snapshot.documents[0]
-                val type = doc.getString("type")
-                
-                if (type == "message") return@addSnapshotListener
-
-                if (!doc.getBoolean("isRead")!!) {
-                    val title = when (type) {
-                        "reaction" -> "New Reaction"
-                        "comment" -> "New Comment"
-                        else -> "New Notification"
-                    }
-                    showNotificationBanner(title, doc.getString("message") ?: "", type ?: "", doc.getString("entityId"))
-                }
-            }
     }
 
     override fun onResume() {
@@ -274,6 +275,24 @@ class HomeActivity : AppCompatActivity() {
         mainHandler.removeCallbacksAndMessages(null)
     }
 
+    private fun replaceFragment(fragment: Fragment) {
+        if (fragment is LocationFragment || fragment is FeedFragment) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            window.statusBarColor = android.graphics.Color.TRANSPARENT
+            WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = true
+        } else {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            window.statusBarColor = resources.getColor(R.color.red_orange, theme)
+            WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = false
+        }
+        supportFragmentManager.beginTransaction().replace(R.id.fragment_container, fragment).commit()
+    }
+
+    private fun isStatusBarTransparent(): Boolean {
+        val fragment = supportFragmentManager.findFragmentById(R.id.fragment_container)
+        return fragment is LocationFragment || fragment is FeedFragment
+    }
+
     private fun checkNotificationPermission() {
         val sharedPreferences = getSharedPreferences("app_prefs", MODE_PRIVATE)
         val hasSeenPrompt = sharedPreferences.getBoolean("has_seen_notification_prompt", false)
@@ -289,24 +308,6 @@ class HomeActivity : AppCompatActivity() {
                     sharedPreferences.edit().putBoolean("has_seen_notification_prompt", true).apply()
                 }.setCancelable(false).show()
         }
-    }
-
-    private fun isStatusBarTransparent(): Boolean {
-        val fragment = supportFragmentManager.findFragmentById(R.id.fragment_container)
-        return fragment is LocationFragment || fragment is FeedFragment
-    }
-
-    private fun replaceFragment(fragment: Fragment) {
-        if (fragment is LocationFragment || fragment is FeedFragment) {
-            WindowCompat.setDecorFitsSystemWindows(window, false)
-            window.statusBarColor = android.graphics.Color.TRANSPARENT
-            WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = true
-        } else {
-            WindowCompat.setDecorFitsSystemWindows(window, false)
-            window.statusBarColor = resources.getColor(R.color.red_orange, theme)
-            WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = false
-        }
-        supportFragmentManager.beginTransaction().replace(R.id.fragment_container, fragment).commit()
     }
 
     private fun listenForAnnouncements() {

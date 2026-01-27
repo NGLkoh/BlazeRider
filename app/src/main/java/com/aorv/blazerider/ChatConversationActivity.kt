@@ -4,9 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
-import android.os.Bundle
-import android.os.Environment
+import android.os.*
 import android.provider.MediaStore
 import android.text.Editable
 import android.text.TextWatcher
@@ -21,22 +19,14 @@ import androidx.core.content.FileProvider
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.aorv.blazerider.databinding.ActivityChatConversationBinding
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.ListenerRegistration
-import com.google.firebase.firestore.SetOptions
-import com.google.firebase.storage.FirebaseStorage
 import com.bumptech.glide.Glide
-import com.google.firebase.Timestamp
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.*
+import com.google.firebase.storage.FirebaseStorage
 import java.io.File
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
-import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.Query
-import android.os.Handler
-import android.os.Looper
-import android.os.SystemClock
 
 class ChatConversationActivity : AppCompatActivity() {
     private lateinit var binding: ActivityChatConversationBinding
@@ -49,14 +39,12 @@ class ChatConversationActivity : AppCompatActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var chatId: String? = null
     private var isTyping = false
+    private var recipientContact: Contact? = null
 
     private val PICK_FILE_REQUEST = 1001
     private val CAPTURE_IMAGE_REQUEST = 1002
     private val PICK_IMAGE_REQUEST = 1003
     private var photoUri: Uri? = null
-    private val STORAGE_PERMISSION_REQUEST = 1004
-    private val CAMERA_PERMISSION_REQUEST = 1005
-    private val GALLERY_PERMISSION_REQUEST = 1006
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -76,15 +64,10 @@ class ChatConversationActivity : AppCompatActivity() {
     }
 
     private fun setupUI() {
-        Glide.with(this)
-            .asGif()
-            .load(R.drawable.typing_indicator)
-            .into(binding.typingIndicator)
+        Glide.with(this).asGif().load(R.drawable.typing_indicator).into(binding.typingIndicator)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                finish()
-            }
+            override fun handleOnBackPressed() { finish() }
         })
 
         binding.backButton.setOnClickListener { finish() }
@@ -95,6 +78,7 @@ class ChatConversationActivity : AppCompatActivity() {
                 updateTypingStatus(false)
             }
         }
+
         binding.fileButton.setOnClickListener { openFilePicker() }
         binding.cameraButton.setOnClickListener { openCamera() }
         binding.galleryButton.setOnClickListener { openGallery() }
@@ -110,253 +94,96 @@ class ChatConversationActivity : AppCompatActivity() {
                 }
             }
         })
-
-        binding.notificationBanner.notificationDismiss.setOnClickListener {
-            binding.notificationBanner.root.visibility = View.GONE
-        }
     }
 
     private fun handleIntentData(currentUid: String) {
-        chatId = intent.getStringExtra("chatId")
-        val contact = intent.getSerializableExtra("CONTACT") as? Contact
+        try {
+            chatId = intent.getStringExtra("chatId")
+            recipientContact = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getSerializableExtra("CONTACT", Contact::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getSerializableExtra("CONTACT") as? Contact
+            }
 
-        messageAdapter = MessageAdapter(currentUid, chatId ?: "", db)
-        binding.messagesRecyclerView.adapter = messageAdapter
-        val layoutManager = LinearLayoutManager(this)
-        layoutManager.stackFromEnd = true
-        binding.messagesRecyclerView.layoutManager = layoutManager
+            // REVERTED: Instead of a random ID, generate a stable ID based on both users
+            if (recipientContact != null && chatId == null) {
+                val partnerId = recipientContact!!.id
+                chatId = if (currentUid < partnerId) "${currentUid}_$partnerId" else "${partnerId}_$currentUid"
+            }
 
-        if (contact != null) {
-            val fullName = "${contact.firstName} ${contact.lastName}".trim().ifEmpty { "Unknown User" }
-            binding.userName.text = fullName
-            Glide.with(this)
-                .load(contact.profileImageUrl)
-                .placeholder(R.drawable.ic_anonymous)
-                .error(R.drawable.ic_anonymous)
-                .into(binding.userImage)
-            
-            findOrCreateP2PChat(contact)
-        } else if (chatId != null) {
+            val targetId = chatId ?: return
+
+            messageAdapter = MessageAdapter(currentUid, targetId, db)
+            binding.messagesRecyclerView.adapter = messageAdapter
+            binding.messagesRecyclerView.layoutManager = LinearLayoutManager(this).apply {
+                stackFromEnd = true
+            }
+
+            if (recipientContact != null) {
+                val contact = recipientContact!!
+                binding.userName.text = "${contact.firstName} ${contact.lastName}".trim()
+                loadRecipientProfile(contact.id)
+            } else {
+                loadChatDetails(targetId)
+            }
+
+            listenForMessages(targetId)
+            listenForTypingStatus(targetId, currentUid)
             markChatAsRead()
-            loadChatDetails(chatId!!)
-            listenForMessages(chatId!!)
-            listenForTypingStatus(chatId!!, currentUid)
-        } else {
-            Toast.makeText(this, "Error: No chat selected", Toast.LENGTH_SHORT).show()
+
+        } catch (e: Exception) {
+            Log.e("ChatCrash", "Intent data error: ${e.message}")
             finish()
         }
     }
 
-    private fun markChatAsRead() {
-        val currentUid = auth.currentUser?.uid ?: return
-        val id = chatId ?: return
-
-        db.collection("userChats").document(currentUid)
-            .collection("chats").document(id)
-            .update("unreadCount", 0)
-            .addOnFailureListener { e ->
-                Log.e("ChatConversation", "Failed to reset unreadCount", e)
+    private fun loadRecipientProfile(uid: String) {
+        db.collection("users").document(uid).get().addOnSuccessListener { userDoc ->
+            if (userDoc.exists()) {
+                val firstName = userDoc.getString("firstName") ?: ""
+                val lastName = userDoc.getString("lastName") ?: ""
+                binding.userName.text = "$firstName $lastName".trim()
+                val imageUrl = userDoc.getString("profileImageUrl")
+                Glide.with(this)
+                    .load(imageUrl)
+                    .placeholder(R.drawable.ic_anonymous)
+                    .error(R.drawable.ic_anonymous)
+                    .circleCrop()
+                    .into(binding.userImage)
             }
-    }
-
-    private fun listenForNotifications() {
-        val userId = auth.currentUser?.uid ?: return
-        val prefs = getSharedPreferences("shown_notifications", MODE_PRIVATE)
-
-        notificationsListener = db.collection("users").document(userId).collection("notifications")
-            .orderBy("createdAt", Query.Direction.DESCENDING).limit(1)
-            .addSnapshotListener { snapshot, e ->
-                if (e != null || snapshot == null || snapshot.metadata.hasPendingWrites()) return@addSnapshotListener
-
-                if (!snapshot.isEmpty) {
-                    val doc = snapshot.documents[0]
-                    val notificationId = doc.id
-                    val type = doc.getString("type")
-                    val entityId = doc.getString("entityId")
-                    
-                    if (type == "message" && entityId == chatId) return@addSnapshotListener
-
-                    val isRead = doc.getBoolean("isRead") ?: true
-                    if (!isRead && !prefs.getBoolean(notificationId, false)) {
-                        val title = when (type) {
-                            "reaction" -> "New Reaction"
-                            "comment" -> "New Comment"
-                            "message" -> "New Message"
-                            else -> "New Notification"
-                        }
-                        val message = doc.getString("message") ?: ""
-                        showNotificationBanner(title, message, notificationId, type, entityId)
-                        prefs.edit().putBoolean(notificationId, true).apply()
-                    }
-                }
-            }
-    }
-
-    private fun showNotificationBanner(title: String, message: String, notificationId: String, type: String?, entityId: String?) {
-        mainHandler.post {
-            if (isFinishing || isDestroyed) return@post
-            binding.notificationBanner.notificationTitle.text = title
-            binding.notificationBanner.notificationMessage.text = message
-            binding.notificationBanner.root.visibility = View.VISIBLE
-
-            binding.notificationBanner.root.setOnClickListener {
-                val userId = auth.currentUser?.uid
-                if (userId != null) {
-                    db.collection("users").document(userId)
-                        .collection("notifications").document(notificationId)
-                        .update("isRead", true)
-                }
-
-                when (type) {
-                    "reaction" -> {
-                        val intent = Intent(this, SinglePostActivity::class.java).apply { putExtra("POST_ID", entityId) }
-                        startActivity(intent)
-                    }
-                    "comment" -> {
-                        val intent = Intent(this, CommentsActivity::class.java).apply { putExtra("POST_ID", entityId) }
-                        startActivity(intent)
-                    }
-                    "message" -> {
-                        if (entityId != chatId) {
-                            val intent = Intent(this, ChatConversationActivity::class.java).apply { putExtra("chatId", entityId) }
-                            startActivity(intent)
-                        }
-                    }
-                }
-                binding.notificationBanner.root.visibility = View.GONE
-            }
-
-            mainHandler.removeCallbacksAndMessages("banner_timeout")
-            mainHandler.postAtTime({
-                if (!isFinishing && !isDestroyed) binding.notificationBanner.root.visibility = View.GONE
-            }, "banner_timeout", SystemClock.uptimeMillis() + 5000)
         }
     }
 
-    private fun findOrCreateP2PChat(contact: Contact) {
+    private fun initializeChatOnFirstMessage() {
         val currentUid = auth.currentUser?.uid ?: return
-        val otherUserId = contact.id
-        val potentialChatId = if (currentUid > otherUserId) "${currentUid}_${otherUserId}" else "${otherUserId}_${currentUid}"
-
-        chatId = potentialChatId
-        messageAdapter.setChatId(potentialChatId)
+        val contact = recipientContact ?: return
+        val id = chatId ?: return
 
         val chatData = hashMapOf(
-            "name" to "${contact.firstName} ${contact.lastName}".trim(),
-            "members" to listOf(currentUid, otherUserId),
+            "chatId" to id,
+            "members" to listOf(currentUid, contact.id),
             "type" to "p2p",
-            "typing" to mapOf(currentUid to false, otherUserId to false)
+            "createdAt" to FieldValue.serverTimestamp(),
+            "typing" to mapOf(currentUid to false, contact.id to false)
         )
 
-        // 1. Ensure the main chat document exists
-        db.collection("chats").document(potentialChatId).set(chatData, SetOptions.merge())
+        db.collection("chats").document(id).set(chatData, SetOptions.merge())
             .addOnSuccessListener {
-                // 2. Initialize the chat for BOTH users in their personal 'userChats' collection
-                // This prevents errors when trying to update 'unreadCount' later
-                initializeUserChatEntry(currentUid, potentialChatId, contact)
-                initializeUserChatEntry(otherUserId, potentialChatId, null) // Null because we'll fetch details later or use current user info
-
-                markChatAsRead()
-                listenForMessages(potentialChatId)
-                listenForTypingStatus(potentialChatId, currentUid)
-            }
-            .addOnFailureListener { e ->
-                Toast.makeText(this, "Failed to start chat: ${e.message}", Toast.LENGTH_SHORT).show()
+                initializeUserChatEntry(currentUid, id)
+                initializeUserChatEntry(contact.id, id)
+                recipientContact = null
             }
     }
 
-    private fun initializeUserChatEntry(userId: String, chatId: String, contact: Contact?) {
+    private fun initializeUserChatEntry(userId: String, chatId: String) {
         val userChatRef = db.collection("userChats").document(userId).collection("chats").document(chatId)
         val data = hashMapOf(
             "chatId" to chatId,
-            "type" to "p2p"
+            "type" to "p2p",
+            "unreadCount" to 0
         )
-        // Use merge to avoid overwriting existing unread counts or last messages
         userChatRef.set(data, SetOptions.merge())
-    }
-    private fun updateTypingStatus(isTyping: Boolean) {
-        val currentUid = auth.currentUser?.uid ?: return
-        val id = chatId ?: return
-
-        db.collection("chats").document(id)
-            .update("typing.$currentUid", isTyping)
-            .addOnFailureListener { e ->
-                Log.e("ChatConversation", "Failed to update typing status", e)
-            }
-    }
-
-    private fun listenForTypingStatus(chatId: String, currentUid: String) {
-        typingListener?.remove()
-        typingListener = db.collection("chats").document(chatId)
-            .addSnapshotListener { snapshot, e ->
-                if (e != null || snapshot == null) return@addSnapshotListener
-
-                val typingMap = snapshot.get("typing") as? Map<*, *> ?: emptyMap<String, Any>()
-                val isSomeoneTyping = typingMap.any { (userId, isTyping) ->
-                    userId != currentUid && isTyping == true
-                }
-                binding.typingIndicator.isVisible = isSomeoneTyping
-            }
-    }
-
-    private fun openFilePicker() {
-        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
-        if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(permission), STORAGE_PERMISSION_REQUEST)
-            return
-        }
-        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-            type = "*/*"
-            addCategory(Intent.CATEGORY_OPENABLE)
-        }
-        try {
-            startActivityForResult(Intent.createChooser(intent, "Select a File"), PICK_FILE_REQUEST)
-        } catch (e: Exception) {
-            Toast.makeText(this, "No file manager found", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun openCamera() {
-        val permissions = mutableListOf<String>().apply {
-            if (ContextCompat.checkSelfPermission(this@ChatConversationActivity, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) add(Manifest.permission.CAMERA)
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q && ContextCompat.checkSelfPermission(this@ChatConversationActivity, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-        }
-        if (permissions.isNotEmpty()) {
-            ActivityCompat.requestPermissions(this, permissions.toTypedArray(), CAMERA_PERMISSION_REQUEST)
-            return
-        }
-        
-        val photoFile: File? = try {
-            createImageFile()
-        } catch (ex: IOException) {
-            Toast.makeText(this, "Error creating file", Toast.LENGTH_SHORT).show()
-            null
-        }
-
-        photoFile?.also {
-            photoUri = FileProvider.getUriForFile(this, "com.aorv.blazerider.fileprovider", it)
-            val takePictureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
-                putExtra(MediaStore.EXTRA_OUTPUT, photoUri)
-            }
-            startActivityForResult(takePictureIntent, CAPTURE_IMAGE_REQUEST)
-        }
-    }
-
-    private fun openGallery() {
-        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
-        if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(permission), GALLERY_PERMISSION_REQUEST)
-            return
-        }
-        val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
-        startActivityForResult(intent, PICK_IMAGE_REQUEST)
-    }
-
-    @Throws(IOException::class)
-    private fun createImageFile(): File {
-        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-        val storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES)
-        return File.createTempFile("JPEG_${timeStamp}_", ".jpg", storageDir)
     }
 
     private fun sendMessage() {
@@ -365,20 +192,25 @@ class ChatConversationActivity : AppCompatActivity() {
         val id = chatId ?: return
 
         if (text.isNotEmpty()) {
+            if (recipientContact != null) {
+                initializeChatOnFirstMessage()
+            }
+
             val messageData = hashMapOf(
                 "senderId" to currentUid,
                 "content" to text,
                 "timestamp" to FieldValue.serverTimestamp(),
                 "type" to "text",
-                "status" to "sent",         // Match your class default
-                "readBy" to emptyList<String>(),    // Add this
+                "status" to "sent",
+                "readBy" to listOf(currentUid),
                 "deletedBy" to emptyList<String>()
             )
+
+            binding.messageInput.text.clear()
 
             db.collection("chats").document(id)
                 .collection("messages").add(messageData)
                 .addOnSuccessListener { docRef ->
-                    binding.messageInput.text.clear()
                     updateLastMessage(id, text, currentUid, docRef.id)
                 }
         }
@@ -392,84 +224,105 @@ class ChatConversationActivity : AppCompatActivity() {
             "timestamp" to FieldValue.serverTimestamp()
         )
 
+        val batch = db.batch()
         val chatRef = db.collection("chats").document(chatId)
+
+        batch.update(chatRef, "lastMessage", lastMessageData)
 
         chatRef.get().addOnSuccessListener { doc ->
             if (!doc.exists()) return@addOnSuccessListener
-
-            val batch = db.batch()
-
-            // Update main chat object
-            batch.update(chatRef, "lastMessage", lastMessageData)
 
             val members = doc.get("members") as? List<*>
             members?.forEach { memberId ->
                 val uid = memberId.toString()
                 val userChatRef = db.collection("userChats").document(uid).collection("chats").document(chatId)
 
-                // USE SET with MERGE instead of UPDATE here.
-                // If the document doesn't exist, UPDATE will crash. SET will create it.
+                // Archive/Restore Logic: set(merge) makes the chat reappears in the list
+                // for both users as soon as a new message is sent.
                 batch.set(userChatRef, mapOf("lastMessage" to lastMessageData), SetOptions.merge())
 
                 if (uid != senderId) {
                     batch.update(userChatRef, "unreadCount", FieldValue.increment(1))
                 }
             }
-
-            batch.commit().addOnFailureListener { e ->
-                Log.e("ChatConversation", "Batch failed: ${e.message}")
-            }
+            batch.commit()
         }
     }
 
-    private fun listenForMessages(chatId: String) {
+    private fun markChatAsRead() {
         val currentUid = auth.currentUser?.uid ?: return
-        messageListener?.remove()
-        messageListener = db.collection("chats").document(chatId)
-            .collection("messages").orderBy("timestamp", Query.Direction.ASCENDING)
-            .addSnapshotListener { snapshot, e ->
-                if (e != null) {
-                    Log.w("ChatConversation", "Listen failed.", e)
-                    return@addSnapshotListener
-                }
-
-                if (snapshot != null) {
-                    val messages = snapshot.toObjects(Message::class.java)
-                    // Filter out messages that have been deleted by the current user
-                    val filteredMessages = messages.filter { !it.deletedBy.contains(currentUid) }
-                    messageAdapter.submitList(filteredMessages)
-                    if (filteredMessages.isNotEmpty()) {
-                        binding.messagesRecyclerView.scrollToPosition(filteredMessages.size - 1)
-                    }
-                }
-            }
+        val id = chatId ?: return
+        db.collection("userChats").document(currentUid).collection("chats").document(id)
+            .update("unreadCount", 0)
+            .addOnFailureListener { Log.e("ChatRead", "Error marking read") }
     }
 
     private fun loadChatDetails(chatId: String) {
         db.collection("chats").document(chatId).get().addOnSuccessListener { doc ->
             val members = doc.get("members") as? List<*>
             val otherUserId = members?.find { it != auth.currentUser?.uid } as? String
-            if (otherUserId != null) {
-                db.collection("users").document(otherUserId).get().addOnSuccessListener { userDoc ->
-                    val firstName = userDoc.getString("firstName") ?: ""
-                    val lastName = userDoc.getString("lastName") ?: ""
-                    val profileImageUrl = userDoc.getString("profileImageUrl")
-                    binding.userName.text = "$firstName $lastName".trim()
-                    Glide.with(this)
-                        .load(profileImageUrl)
-                        .placeholder(R.drawable.ic_anonymous)
-                        .error(R.drawable.ic_anonymous)
-                        .into(binding.userImage)
-                }
-            }
+            otherUserId?.let { uid -> loadRecipientProfile(uid) }
         }
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        messageListener?.remove()
+    private fun updateTypingStatus(status: Boolean) {
+        val currentUid = auth.currentUser?.uid ?: return
+        val id = chatId ?: return
+        db.collection("chats").document(id).update("typing.$currentUid", status)
+    }
+
+    private fun listenForTypingStatus(id: String, currentUid: String) {
         typingListener?.remove()
-        notificationsListener?.remove()
+        typingListener = db.collection("chats").document(id).addSnapshotListener { snapshot, _ ->
+            val typingMap = snapshot?.get("typing") as? Map<*, *> ?: emptyMap<String, Any>()
+            val otherIsTyping = typingMap.any { (u, t) -> u != currentUid && t == true }
+            binding.typingIndicator.isVisible = otherIsTyping
+        }
+    }
+
+    private fun listenForMessages(targetChatId: String) {
+        val currentUid = auth.currentUser?.uid ?: return
+        messageListener?.remove()
+        messageListener = db.collection("chats").document(targetChatId)
+            .collection("messages").orderBy("timestamp", Query.Direction.ASCENDING)
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) return@addSnapshotListener
+                snapshot?.let { querySnapshot ->
+                    val messages = querySnapshot.toObjects(Message::class.java)
+                    // The "Archive" effect: This hides messages you previously 'deleted'
+                    val filteredMessages = messages.filter { !it.deletedBy.contains(currentUid) }
+                    messageAdapter.submitList(filteredMessages)
+
+                    if (filteredMessages.isNotEmpty()) {
+                        binding.messagesRecyclerView.post {
+                            binding.messagesRecyclerView.scrollToPosition(filteredMessages.size - 1)
+                        }
+                    }
+                }
+            }
+    }
+
+    private fun listenForNotifications() {
+        val userId = auth.currentUser?.uid ?: return
+        notificationsListener = db.collection("users").document(userId).collection("notifications")
+            .orderBy("createdAt", Query.Direction.DESCENDING).limit(1)
+            .addSnapshotListener { snapshot, e ->
+                if (e != null || snapshot == null || snapshot.isEmpty) return@addSnapshotListener
+                val doc = snapshot.documents[0]
+                if (doc.getString("entityId") == chatId) return@addSnapshotListener
+                if (!(doc.getBoolean("isRead") ?: true)) {
+                    showNotificationBanner(doc.getString("title") ?: "New Message", doc.getString("message") ?: "")
+                }
+            }
+    }
+
+    private fun showNotificationBanner(title: String, message: String) {
+        mainHandler.post {
+            binding.notificationBanner.notificationTitle.text = title
+            binding.notificationBanner.notificationMessage.text = message
+            binding.notificationBanner.root.visibility = View.VISIBLE
+            mainHandler.postDelayed({ binding.notificationBanner.root.visibility = View.GONE }, 5000)
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -486,9 +339,12 @@ class ChatConversationActivity : AppCompatActivity() {
     private fun uploadFile(uri: Uri, type: String) {
         val currentUid = auth.currentUser?.uid ?: return
         val id = chatId ?: return
-        val storageRef = FirebaseStorage.getInstance().reference
-            .child("chat_files/$id/${UUID.randomUUID()}")
 
+        if (recipientContact != null) {
+            initializeChatOnFirstMessage()
+        }
+
+        val storageRef = FirebaseStorage.getInstance().reference.child("chat_files/$id/${UUID.randomUUID()}")
         storageRef.putFile(uri).addOnSuccessListener {
             storageRef.downloadUrl.addOnSuccessListener { downloadUri ->
                 val messageData = hashMapOf(
@@ -496,6 +352,7 @@ class ChatConversationActivity : AppCompatActivity() {
                     "timestamp" to FieldValue.serverTimestamp(),
                     "type" to type,
                     "content" to downloadUri.toString(),
+                    "status" to "sent",
                     "deletedBy" to emptyList<String>()
                 )
                 db.collection("chats").document(id).collection("messages").add(messageData)
@@ -503,8 +360,46 @@ class ChatConversationActivity : AppCompatActivity() {
                         updateLastMessage(id, if (type == "image") "Sent an image" else "Sent a file", currentUid, docRef.id)
                     }
             }
-        }.addOnFailureListener {
-            Toast.makeText(this, "Upload failed", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun openFilePicker() {
+        val intent = Intent(Intent.ACTION_GET_CONTENT).apply { type = "*/*" }
+        startActivityForResult(intent, PICK_FILE_REQUEST)
+    }
+
+    private fun openCamera() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), 101)
+            return
+        }
+
+        val photoFile: File? = try { createImageFile() } catch (e: IOException) { null }
+        photoFile?.also {
+            photoUri = FileProvider.getUriForFile(this, "com.aorv.blazerider.fileprovider", it)
+            val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                putExtra(MediaStore.EXTRA_OUTPUT, photoUri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivityForResult(intent, CAPTURE_IMAGE_REQUEST)
+        }
+    }
+
+    private fun openGallery() {
+        val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+        startActivityForResult(intent, PICK_IMAGE_REQUEST)
+    }
+
+    @Throws(IOException::class)
+    private fun createImageFile(): File {
+        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        return File.createTempFile("JPEG_${timeStamp}_", ".jpg", getExternalFilesDir(Environment.DIRECTORY_PICTURES))
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        messageListener?.remove()
+        typingListener?.remove()
+        notificationsListener?.remove()
     }
 }

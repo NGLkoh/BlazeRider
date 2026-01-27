@@ -98,7 +98,10 @@
             android:theme="@style/Theme.Material3.DynamicColors.Light.NoActionBar"
 
             />
-
+        <activity
+            android:name=".FullScreenImageActivity"
+            android:theme="@style/Theme.AppCompat.NoActionBar"
+            android:screenOrientation="portrait" />
         <activity android:name=".PreviewRideActivity" />
 
         <activity android:name=".EditProfileActivity"

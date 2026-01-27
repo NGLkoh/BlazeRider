@@ -90,7 +90,7 @@ class MessagesActivity : AppCompatActivity() {
                 val position = viewHolder.adapterPosition
                 if (position != RecyclerView.NO_POSITION) {
                     val chat = adapter.getChatAt(position)
-                    showDeleteConfirmationDialog(chat)
+                    showDeleteConfirmationDialog(chat, position)
                 }
             }
         })
@@ -116,7 +116,7 @@ class MessagesActivity : AppCompatActivity() {
 
     private fun startChatListener() {
         val userId = auth.currentUser?.uid ?: return
-        
+
         chatListener = db.collection("userChats").document(userId).collection("chats")
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
@@ -129,12 +129,12 @@ class MessagesActivity : AppCompatActivity() {
                 updateJob = lifecycleScope.launch {
                     try {
                         val updatedChats = mutableListOf<Chat>()
-                        
+
                         for (doc in snapshot.documents) {
                             val chatId = doc.id
                             val unreadCount = doc.getLong("unreadCount")?.toInt() ?: 0
                             val lastMessageMap = doc.get("lastMessage") as? Map<*, *>
-                            
+
                             val chatDoc = db.collection("chats").document(chatId).get().await()
                             if (!chatDoc.exists()) continue
 
@@ -199,7 +199,7 @@ class MessagesActivity : AppCompatActivity() {
                         val unreadCount = dc.document.getLong("unreadCount") ?: 0
                         val lastMessageMap = dc.document.get("lastMessage") as? Map<*, *>
                         val senderId = lastMessageMap?.get("senderId") as? String
-                        
+
                         if (unreadCount > 0 && senderId != null && senderId != userId) {
                             db.collection("users").document(senderId).get().addOnSuccessListener { userDoc ->
                                 if (userDoc.exists()) {
@@ -230,7 +230,7 @@ class MessagesActivity : AppCompatActivity() {
             binding.notificationBanner.notificationTitle.text = "New Message"
             binding.notificationBanner.notificationMessage.text = "$senderName: $message"
             binding.notificationBanner.root.visibility = View.VISIBLE
-            
+
             binding.notificationBanner.root.setOnClickListener {
                 binding.notificationBanner.root.visibility = View.GONE
             }
@@ -257,16 +257,21 @@ class MessagesActivity : AppCompatActivity() {
         adapter.updateChats(filteredList)
     }
 
-    private fun showDeleteConfirmationDialog(chat: Chat) {
+    private fun showDeleteConfirmationDialog(chat: Chat, position: Int) {
         MaterialAlertDialogBuilder(this)
-            .setTitle("Delete Chat")
-            .setMessage("Are you sure you want to delete this chat history?")
+            .setTitle("Archive Chat")
+            .setMessage("Are you sure you want to remove this chat from your list?")
             .setNegativeButton("Cancel") { dialog, _ ->
-                adapter.notifyDataSetChanged()
+                // Reset the swiped item visually
+                adapter.notifyItemChanged(position)
                 dialog.dismiss()
             }
-            .setPositiveButton("Delete") { _, _ -> deleteChat(chat) }
-            .setOnCancelListener { adapter.notifyDataSetChanged() }
+            .setPositiveButton("Archive") { _, _ ->
+                deleteChat(chat)
+            }
+            .setOnCancelListener {
+                adapter.notifyItemChanged(position)
+            }
             .show()
     }
 
@@ -274,12 +279,24 @@ class MessagesActivity : AppCompatActivity() {
         val userId = auth.currentUser?.uid ?: return
         lifecycleScope.launch {
             try {
-                db.collection("userChats").document(userId).collection("chats").document(chat.chatId).delete().await()
+                // This removes the chat reference ONLY for the current user.
+                // It does NOT delete the messages or the chat document in the 'chats' collection.
+                db.collection("userChats")
+                    .document(userId)
+                    .collection("chats")
+                    .document(chat.chatId)
+                    .delete()
+                    .await()
+
+                // Remove from local list and refresh UI
                 chats.removeAll { it.chatId == chat.chatId }
                 filterChats(binding.searchInput.text.toString())
+
+                Toast.makeText(this@MessagesActivity, "Chat removed", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
-                Log.e("MessagesActivity", "Error deleting chat", e)
-                Toast.makeText(this@MessagesActivity, "Failed to delete chat", Toast.LENGTH_SHORT).show()
+                Log.e("MessagesActivity", "Error removing chat", e)
+                Toast.makeText(this@MessagesActivity, "Failed to remove chat", Toast.LENGTH_SHORT).show()
+                // If it fails, refresh the adapter to bring the item back
                 adapter.notifyDataSetChanged()
             }
         }

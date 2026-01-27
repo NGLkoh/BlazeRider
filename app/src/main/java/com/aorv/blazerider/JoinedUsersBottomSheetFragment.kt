@@ -44,15 +44,23 @@ class JoinedUsersBottomSheetFragment : BottomSheetDialogFragment() {
 
         joinedUsersAdapter = JoinedUsersAdapter(users) { user ->
             val intent = Intent(context, ChatConversationActivity::class.java).apply {
+                // Split name if possible for better contact data, or just use as firstName
+                val nameParts = user.name.split(" ", limit = 2)
+                val firstName = nameParts.getOrNull(0) ?: user.name
+                val lastName = nameParts.getOrNull(1) ?: ""
+                
                 val contact = Contact(
                     id = user.userId,
-                    firstName = user.name,
-                    lastName = "",
-                    profileImageUrl = null
+                    firstName = firstName,
+                    lastName = lastName,
+                    profileImageUrl = user.profilePictureUrl
                 )
                 putExtra("CONTACT", contact)
+                // We don't pass chatId here so ChatConversationActivity 
+                // generates the stable ID based on current user and contact ID.
             }
             startActivity(intent)
+            dismiss() // Close the bottom sheet after clicking
         }
         joinedUsersList.adapter = joinedUsersAdapter
 

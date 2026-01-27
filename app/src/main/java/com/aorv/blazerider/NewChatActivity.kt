@@ -4,19 +4,20 @@ import android.content.Intent
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
-import com.google.android.material.imageview.ShapeableImageView
 import com.google.firebase.firestore.FirebaseFirestore
 import com.aorv.blazerider.databinding.ActivityNewChatBinding
 import com.aorv.blazerider.databinding.ItemContactBinding
 import com.google.firebase.Timestamp
-import java.io.Serializable
+import com.google.firebase.auth.FirebaseAuth
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -27,15 +28,18 @@ class ContactAdapter(private val onContactClick: (Contact) -> Unit) : RecyclerVi
 
     class ViewHolder(private val binding: ItemContactBinding, private val onClick: (Contact) -> Unit) : RecyclerView.ViewHolder(binding.root) {
         fun bind(contact: Contact) {
-            binding.contactName.text = "${contact.firstName} ${contact.lastName}"
-            contact.profileImageUrl?.let { url ->
-                Glide.with(binding.contactImage.context)
-                    .load(url)
-                    .placeholder(R.drawable.ic_anonymous)
-                    .error(R.drawable.ic_anonymous)
-                    .into(binding.contactImage)
-            } ?: binding.contactImage.setImageResource(R.drawable.ic_anonymous)
-            binding.root.setOnClickListener { onClick(contact) }
+            binding.contactName.text = "${contact.firstName} ${contact.lastName}".trim()
+
+            Glide.with(binding.contactImage.context)
+                .load(contact.profileImageUrl)
+                .placeholder(R.drawable.ic_anonymous)
+                .error(R.drawable.ic_anonymous)
+                .circleCrop()
+                .into(binding.contactImage)
+
+            binding.root.setOnClickListener {
+                onClick(contact)
+            }
         }
     }
 
@@ -45,7 +49,9 @@ class ContactAdapter(private val onContactClick: (Contact) -> Unit) : RecyclerVi
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(filteredContacts[position])
+        if (position < filteredContacts.size) {
+            holder.bind(filteredContacts[position])
+        }
     }
 
     override fun getItemCount(): Int = filteredContacts.size
@@ -60,11 +66,11 @@ class ContactAdapter(private val onContactClick: (Contact) -> Unit) : RecyclerVi
     }
 
     fun filter(query: String) {
+        val lowercaseQuery = query.lowercase().trim()
         filteredContacts.clear()
-        if (query.isEmpty()) {
+        if (lowercaseQuery.isEmpty()) {
             filteredContacts.addAll(contacts)
         } else {
-            val lowercaseQuery = query.lowercase()
             filteredContacts.addAll(contacts.filter {
                 it.firstName.lowercase().contains(lowercaseQuery) ||
                         it.lastName.lowercase().contains(lowercaseQuery) ||
@@ -91,48 +97,49 @@ class NewChatActivity : AppCompatActivity() {
         binding = ActivityNewChatBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Set up RecyclerView
         adapter = ContactAdapter { contact ->
-            val intent = Intent(this, ChatConversationActivity::class.java)
-            intent.putExtra("CONTACT", contact)
-            startActivity(intent)
+            try {
+                if (contact.id.isEmpty()) {
+                    Toast.makeText(this, "Invalid User Data", Toast.LENGTH_SHORT).show()
+                    return@ContactAdapter
+                }
+
+                // FRESH START LOGIC:
+                // We do NOT look for an existing chatId here.
+                // We simply pass the CONTACT object.
+                val intent = Intent(this, ChatConversationActivity::class.java)
+                intent.putExtra("CONTACT", contact)
+
+                // Clear this activity from stack so they go directly to the chat
+                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                startActivity(intent)
+                finish()
+            } catch (e: Exception) {
+                Log.e("NAV_ERROR", "Failed to open chat: ${e.message}")
+            }
         }
+
         binding.searchRecyclerView.layoutManager = LinearLayoutManager(this)
         binding.searchRecyclerView.adapter = adapter
 
-        // Set up no results callback
         adapter.setNoResultsCallback { isEmpty ->
             binding.noResultsText.visibility = if (isEmpty && isSearchActive) View.VISIBLE else View.GONE
         }
 
-        // Fetch contacts from Firestore
         fetchContacts()
 
-        // Handle back button click
         binding.backButton.setOnClickListener {
-            if (isSearchActive) {
-                toggleSearch(false)
-            } else {
-                finish()
-            }
+            if (isSearchActive) toggleSearch(false) else finish()
         }
 
-        // Handle group chat button click
         binding.startGroupChat.setOnClickListener {
             startActivity(Intent(this, NewGroupCommunityActivity::class.java))
         }
 
-        // Handle search button click to toggle search input
         binding.searchButton.setOnClickListener {
-            if (isSearchActive) {
-                binding.searchInput.text.clear()
-                toggleSearch(false)
-            } else {
-                toggleSearch(true)
-            }
+            toggleSearch(!isSearchActive)
         }
 
-        // Add TextWatcher for real-time search filtering
         binding.searchInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -148,38 +155,47 @@ class NewChatActivity : AppCompatActivity() {
             binding.toolbarTitle.visibility = View.GONE
             binding.searchInput.visibility = View.VISIBLE
             binding.searchInput.requestFocus()
-            adapter.filter(binding.searchInput.text.toString())
         } else {
             binding.searchInput.visibility = View.GONE
             binding.toolbarTitle.visibility = View.VISIBLE
             binding.searchInput.text.clear()
             adapter.filter("")
-            binding.searchButton.setImageResource(R.drawable.ic_search)
-            binding.noResultsText.visibility = View.GONE
         }
     }
 
     private fun fetchContacts() {
+        val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
+
         db.collection("users")
             .get()
             .addOnSuccessListener { result ->
-                val contacts = mutableListOf<Contact>()
-                for (document in result) {
-                    val firstName = document.getString("firstName") ?: ""
-                    val lastName = document.getString("lastName") ?: ""
-                    val profileImageUrl = document.getString("profileImageUrl")
-                    val email = document.getString("email")
-                    // Handle lastActive as Timestamp
-                    val lastActive = when (val value = document.get("lastActive")) {
-                        is Timestamp -> SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(value.toDate())
-                        else -> null
+                val contactsList = result.mapNotNull { document ->
+                    val id = document.id
+
+                    // Skip the current user
+                    if (id == currentUserId) return@mapNotNull null
+
+                    try {
+                        val fName = document.getString("firstName") ?: "Unknown"
+                        val lName = document.getString("lastName") ?: ""
+                        val img = document.getString("profileImageUrl")
+                        val mail = document.getString("email")
+
+                        val activeTime = when (val value = document.get("lastActive")) {
+                            is Timestamp -> SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(value.toDate())
+                            else -> null
+                        }
+
+                        Contact(id, fName, lName, img, mail, activeTime)
+                    } catch (e: Exception) {
+                        Log.e("FETCH_ERROR", "Error parsing user: ${document.id}")
+                        null
                     }
-                    contacts.add(Contact(document.id, firstName, lastName, profileImageUrl, email, lastActive))
                 }
-                adapter.updateContacts(contacts)
+                adapter.updateContacts(contactsList)
             }
-            .addOnFailureListener { exception ->
-                android.widget.Toast.makeText(this, "Failed to load contacts: ${exception.message}", android.widget.Toast.LENGTH_SHORT).show()
+            .addOnFailureListener { e ->
+                Toast.makeText(this, "Load failed: ${e.message}", Toast.LENGTH_SHORT).show()
             }
     }
 }

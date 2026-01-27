@@ -1,6 +1,5 @@
 package com.aorv.blazerider
 
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
@@ -12,7 +11,6 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.PopupMenu
 import android.widget.TextView
-import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.DiffUtil
@@ -20,7 +18,6 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.google.android.material.imageview.ShapeableImageView
-import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import java.text.SimpleDateFormat
@@ -32,36 +29,35 @@ class MessageAdapter(
     private val db: FirebaseFirestore
 ) : ListAdapter<Message, MessageViewHolder>(MessageDiffCallback()) {
 
-    private val userCache = mutableMapOf<String, Pair<String, String>>() // uid -> <Name, PhotoUrl>
+    private val userCache = mutableMapOf<String, Pair<String, String>>()
 
     fun setChatId(chatId: String) {
         this.chatId = chatId
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MessageViewHolder {
-        val view = LayoutInflater.from(parent.context)
-            .inflate(R.layout.item_message, parent, false)
+        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_message, parent, false)
         return MessageViewHolder(view, db, currentUserId, userCache)
     }
 
     override fun onBindViewHolder(holder: MessageViewHolder, position: Int) {
         try {
             val message = getItem(position)
-            holder.bind(message) { view ->
-                showContextMenu(view, message)
-            }
+            // Long click handler passed to the ViewHolder
+            holder.bind(message) { view -> showContextMenu(view, message) }
         } catch (e: Exception) {
-            Log.e("MessageAdapter", "Error binding view holder at position $position", e)
+            Log.e("MessageAdapter", "Error binding at $position", e)
         }
     }
 
     private fun showContextMenu(view: View, message: Message) {
         val popup = PopupMenu(view.context, view)
         popup.inflate(R.menu.message_context_menu)
-        
-        // Hide Unsend if not the sender
         val unsendItem = popup.menu.findItem(R.id.action_unsend)
-        unsendItem.isVisible = message.senderId == currentUserId && message.type != "unsent"
+
+        // Logic: You can unsend if you are the sender and it's not already unsent.
+        // This now works for 'text', 'image', and 'file' types.
+        unsendItem.isVisible = (message.senderId == currentUserId && message.type != "unsent")
 
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
@@ -74,46 +70,21 @@ class MessageAdapter(
     }
 
     private fun unsendMessage(message: Message) {
-        if (chatId.isEmpty()) return
+        if (chatId.isEmpty() || message.id.isEmpty()) return
         val messageRef = db.collection("chats").document(chatId).collection("messages").document(message.id)
-        messageRef.update(mapOf("content" to "This message was unsent", "type" to "unsent"))
-            .addOnSuccessListener { updateLastMessageForUnsend(message) }
+
+        // When unsending an image, we change the type to "unsent".
+        // The displayUnsent() function in ViewHolder will then hide the image and show the text.
+        messageRef.update(mapOf(
+            "content" to "This message was unsent",
+            "type" to "unsent"
+        ))
     }
 
     private fun deleteMessageForMe(message: Message) {
-        if (chatId.isEmpty()) return
-        val messageRef = db.collection("chats").document(chatId).collection("messages").document(message.id)
-        
-        // Add current user to deletedBy list instead of deleting the document
-        messageRef.update("deletedBy", FieldValue.arrayUnion(currentUserId))
-            .addOnSuccessListener {
-                Log.d("MessageAdapter", "Message hidden for user $currentUserId")
-                // No need to update last message globally, as it should still be visible to others
-            }
-            .addOnFailureListener { e ->
-                Log.e("MessageAdapter", "Error hiding message", e)
-            }
-    }
-
-    private fun updateLastMessageForUnsend(message: Message) {
-        if (chatId.isEmpty()) return
-        val chatRef = db.collection("chats").document(chatId)
-        chatRef.get().addOnSuccessListener { chatDoc ->
-            if (!chatDoc.exists()) return@addOnSuccessListener
-            val lastMessage = chatDoc.get("lastMessage") as? Map<*, *>
-            if (lastMessage?.get("id") == message.id) {
-                val batch = db.batch()
-                val updatedLastMessage = lastMessage.toMutableMap()
-                updatedLastMessage["content"] = "This message was unsent"
-                batch.update(chatRef, "lastMessage", updatedLastMessage)
-                val members = chatDoc.get("members") as? List<*>
-                members?.forEach { userId ->
-                    val uid = userId.toString()
-                    batch.update(db.collection("userChats").document(uid).collection("chats").document(chatId), "lastMessage", updatedLastMessage)
-                }
-                batch.commit()
-            }
-        }
+        if (chatId.isEmpty() || message.id.isEmpty()) return
+        db.collection("chats").document(chatId).collection("messages").document(message.id)
+            .update("deletedBy", FieldValue.arrayUnion(currentUserId))
     }
 }
 
@@ -131,149 +102,129 @@ class MessageViewHolder(
     private val timestampDivider: TextView = itemView.findViewById(R.id.timestamp_divider)
     private val messageImage: ImageView? = itemView.findViewById(R.id.message_image)
     private val profileImage: ShapeableImageView = itemView.findViewById(R.id.profile_image)
+    private val statusIndicator: TextView? = itemView.findViewById(R.id.status_indicator)
 
     fun bind(message: Message, onLongClick: (View) -> Unit) {
-        val isCurrentUser = message.senderId == currentUserId
+        val isSelf = message.senderId == currentUserId
 
-        messageContentWrapper.setOnClickListener(null)
-        messageContentWrapper.setOnLongClickListener { 
+        // Layout Alignment
+        messageRow.gravity = if (isSelf) Gravity.END else Gravity.START
+        (messageContentWrapper.layoutParams as LinearLayout.LayoutParams).gravity = if (isSelf) Gravity.END else Gravity.START
+        (timestampText.layoutParams as LinearLayout.LayoutParams).gravity = if (isSelf) Gravity.END else Gravity.START
+
+        // Visibility Reset
+        profileImage.isVisible = !isSelf
+        senderName.isVisible = false
+        messageText.isVisible = false
+        messageImage?.isVisible = false
+        statusIndicator?.isVisible = isSelf
+
+        // Long click listener on the wrapper ensures images can be unsent too
+        messageContentWrapper.setOnLongClickListener {
             onLongClick(it)
             true
         }
 
-        when (message.type) {
-            "text" -> {
-                messageText.isVisible = true
-                messageImage?.isVisible = false
-                messageText.text = message.content
-                messageText.setBackgroundResource(
-                    if (isCurrentUser) R.drawable.rounded_message_background_self
-                    else R.drawable.rounded_message_background_other
-                )
-                messageContentWrapper.setOnClickListener { timestampText.isVisible = !timestampText.isVisible }
-            }
-            "file" -> {
-                messageText.isVisible = true
-                messageImage?.isVisible = false
-                messageText.text = "📎 File Attachment"
-                messageText.setBackgroundResource(
-                    if (isCurrentUser) R.drawable.rounded_message_background_self
-                    else R.drawable.rounded_message_background_other
-                )
-                messageContentWrapper.setOnClickListener {
-                    try { 
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(message.content))
-                        itemView.context.startActivity(intent) 
-                    } catch (e: Exception) {
-                        Log.e("MessageAdapter", "Failed to open file", e)
-                        Toast.makeText(itemView.context, "Unable to open file", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-            "image" -> {
-                messageText.isVisible = false
-                messageImage?.isVisible = true
-                messageImage?.let{
-                    Glide.with(itemView.context)
-                        .load(message.content)
-                        .placeholder(R.drawable.ic_anonymous)
-                        .error(R.drawable.ic_anonymous)
-                        .into(it)
-                }
-                messageContentWrapper.setOnClickListener {
-                    try {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(message.content))
-                        intent.setDataAndType(Uri.parse(message.content), "image/*")
-                        itemView.context.startActivity(intent)
-                    } catch (e: Exception) {
-                        Log.e("MessageAdapter", "Failed to view photo", e)
-                        Toast.makeText(itemView.context, "Unable to view photo", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-            "unsent" -> {
-                messageText.isVisible = true
-                messageImage?.isVisible = false
-                messageText.text = "This message was unsent"
-                messageText.setBackgroundResource(
-                    if (isCurrentUser) R.drawable.rounded_message_background_self
-                    else R.drawable.rounded_message_background_other
-                )
-            }
-        }
-
-        messageText.setTextColor(ContextCompat.getColor(itemView.context,
-            if (isCurrentUser) android.R.color.white else android.R.color.black))
-
         if (message.type == "unsent") {
-            messageText.setTextColor(ContextCompat.getColor(itemView.context, R.color.gray))
+            displayUnsent(isSelf)
+        } else {
+            when (message.type) {
+                "text" -> displayText(message, isSelf)
+                "file" -> displayFile(message, isSelf)
+                "image" -> displayImage(message, isSelf)
+            }
+            if (isSelf) updateStatusIndicator(message.status)
         }
 
+        setupMetadata(isSelf, message)
+    }
+
+    private fun displayUnsent(isSelf: Boolean) {
+        messageText.isVisible = true
+        messageImage?.isVisible = false // Ensure image is hidden when unsent
+        messageText.text = "This message was unsent"
+        messageText.setTextColor(ContextCompat.getColor(itemView.context, android.R.color.darker_gray))
+        messageText.setBackgroundResource(
+            if (isSelf) R.drawable.rounded_message_background_self
+            else R.drawable.rounded_message_background_other
+        )
+    }
+
+    private fun displayText(message: Message, isSelf: Boolean) {
+        messageText.isVisible = true
+        messageText.text = message.content
+        messageText.setTextColor(ContextCompat.getColor(itemView.context, if (isSelf) android.R.color.white else android.R.color.black))
+        messageText.setBackgroundResource(
+            if (isSelf) R.drawable.rounded_message_background_self
+            else R.drawable.rounded_message_background_other
+        )
+        messageContentWrapper.setOnClickListener { timestampText.isVisible = !timestampText.isVisible }
+    }
+
+    private fun displayFile(message: Message, isSelf: Boolean) {
+        messageText.isVisible = true
+        messageText.text = "📎 File Attachment"
+        messageText.setBackgroundResource(
+            if (isSelf) R.drawable.rounded_message_background_self
+            else R.drawable.rounded_message_background_other
+        )
+        messageContentWrapper.setOnClickListener {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(message.content))
+            itemView.context.startActivity(intent)
+        }
+    }
+
+    private fun displayImage(message: Message, isSelf: Boolean) {
+        messageImage?.isVisible = true
+        messageImage?.let { imageView ->
+            Glide.with(itemView.context)
+                .load(message.content)
+                .into(imageView)
+
+            imageView.setOnClickListener {
+                val intent = Intent(itemView.context, FullScreenImageActivity::class.java).apply {
+                    putExtra("IMAGE_URL", message.content)
+                }
+                itemView.context.startActivity(intent)
+            }
+        }
+    }
+
+    private fun updateStatusIndicator(status: String) {
+        statusIndicator?.let {
+            it.text = if (status == "read") "Read" else "Sent"
+            it.setTextColor(ContextCompat.getColor(itemView.context,
+                if (status == "read") android.R.color.holo_blue_dark else android.R.color.darker_gray))
+        }
+    }
+
+    private fun setupMetadata(isSelf: Boolean, message: Message) {
+        if (!isSelf) fetchUserInfo(message.senderId)
         val dateFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
         timestampText.text = message.timestamp?.let { dateFormat.format(it.toDate()) } ?: ""
-        timestampText.isVisible = false
-
         timestampDivider.isVisible = message.showDivider && message.timestamp != null
-        if (message.showDivider && message.timestamp != null) {
-            timestampDivider.text = formatDividerTimestamp(message.timestamp)
+        if (timestampDivider.isVisible) {
+            timestampDivider.text = "--- ${SimpleDateFormat("MMM d", Locale.getDefault()).format(message.timestamp!!.toDate())} ---"
         }
+    }
 
-        // Layout alignment
-        val rowParams = messageRow.layoutParams as LinearLayout.LayoutParams
-        rowParams.gravity = if (isCurrentUser) Gravity.END else Gravity.START
-        rowParams.marginStart = if (isCurrentUser) 48.dpToPx(itemView.context) else 0
-        rowParams.marginEnd = if (isCurrentUser) 8.dpToPx(itemView.context) else 48.dpToPx(itemView.context)
-        messageRow.layoutParams = rowParams
-
-        val contentParams = messageContentWrapper.layoutParams as LinearLayout.LayoutParams
-        contentParams.gravity = if (isCurrentUser) Gravity.END else Gravity.START
-        contentParams.marginStart = if (isCurrentUser) 48.dpToPx(itemView.context) else 8.dpToPx(itemView.context)
-        contentParams.marginEnd = if (isCurrentUser) 8.dpToPx(itemView.context) else 48.dpToPx(itemView.context)
-        messageContentWrapper.layoutParams = contentParams
-        messageContentWrapper.gravity = if (isCurrentUser) Gravity.END else Gravity.START
-
-        profileImage.isVisible = !isCurrentUser
-        if (!isCurrentUser) {
-            val cachedUser = userCache[message.senderId]
-            if (cachedUser != null) {
-                senderName.text = cachedUser.first
-                Glide.with(itemView.context).load(cachedUser.second.ifEmpty { R.drawable.ic_anonymous })
-                    .circleCrop().into(profileImage)
-            } else {
-                senderName.text = "..."
-                profileImage.setImageResource(R.drawable.ic_anonymous)
-                db.collection("users").document(message.senderId).get()
-                    .addOnSuccessListener { document ->
-                        if (document.exists()) {
-                            val name = "${document.getString("firstName") ?: ""} ${document.getString("lastName") ?: ""}".trim()
-                            val photoUrl = document.getString("profileImageUrl") ?: ""
-                            userCache[message.senderId] = Pair(name, photoUrl)
-                            if (bindingAdapterPosition != RecyclerView.NO_POSITION) {
-                                senderName.text = name
-                                Glide.with(itemView.context).load(photoUrl.ifEmpty { R.drawable.ic_anonymous })
-                                    .circleCrop().into(profileImage)
-                            }
-                        }
-                    }
+    private fun fetchUserInfo(uid: String) {
+        val cached = userCache[uid]
+        if (cached != null) {
+            Glide.with(itemView.context).load(cached.second.ifEmpty { R.drawable.ic_anonymous }).circleCrop().into(profileImage)
+        } else {
+            db.collection("users").document(uid).get().addOnSuccessListener { doc ->
+                if (doc.exists()) {
+                    val url = doc.getString("profileImageUrl") ?: ""
+                    userCache[uid] = Pair("", url)
+                    Glide.with(itemView.context).load(url.ifEmpty { R.drawable.ic_anonymous }).circleCrop().into(profileImage)
+                }
             }
         }
     }
-
-    private fun formatDividerTimestamp(timestamp: Timestamp): String {
-        val now = Calendar.getInstance()
-        val timeDiff = now.timeInMillis - timestamp.toDate().time
-        val oneDayMillis = 24 * 60 * 60 * 1000L
-        return when {
-            timeDiff < oneDayMillis -> "--- ${SimpleDateFormat("h:mm a", Locale.getDefault()).format(timestamp.toDate())} ---"
-            timeDiff < 2 * oneDayMillis -> "--- Yesterday at ${SimpleDateFormat("h:mm a", Locale.getDefault()).format(timestamp.toDate())} ---"
-            else -> "--- ${SimpleDateFormat("MMM d 'at' h:mm a", Locale.getDefault()).format(timestamp.toDate())} ---"
-        }
-    }
-
-    private fun Int.dpToPx(context: Context): Int = (this * context.resources.displayMetrics.density).toInt()
 }
 
 class MessageDiffCallback : DiffUtil.ItemCallback<Message>() {
-    override fun areItemsTheSame(oldItem: Message, newItem: Message): Boolean = oldItem.id == newItem.id
-    override fun areContentsTheSame(oldItem: Message, newItem: Message): Boolean = oldItem == newItem
+    override fun areItemsTheSame(old: Message, new: Message) = old.id == new.id
+    override fun areContentsTheSame(old: Message, new: Message) = old == new
 }
