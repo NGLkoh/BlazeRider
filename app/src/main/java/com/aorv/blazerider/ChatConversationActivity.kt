@@ -248,8 +248,14 @@ class ChatConversationActivity : AppCompatActivity() {
             "typing" to mapOf(currentUid to false, otherUserId to false)
         )
 
+        // 1. Ensure the main chat document exists
         db.collection("chats").document(potentialChatId).set(chatData, SetOptions.merge())
             .addOnSuccessListener {
+                // 2. Initialize the chat for BOTH users in their personal 'userChats' collection
+                // This prevents errors when trying to update 'unreadCount' later
+                initializeUserChatEntry(currentUid, potentialChatId, contact)
+                initializeUserChatEntry(otherUserId, potentialChatId, null) // Null because we'll fetch details later or use current user info
+
                 markChatAsRead()
                 listenForMessages(potentialChatId)
                 listenForTypingStatus(potentialChatId, currentUid)
@@ -259,6 +265,15 @@ class ChatConversationActivity : AppCompatActivity() {
             }
     }
 
+    private fun initializeUserChatEntry(userId: String, chatId: String, contact: Contact?) {
+        val userChatRef = db.collection("userChats").document(userId).collection("chats").document(chatId)
+        val data = hashMapOf(
+            "chatId" to chatId,
+            "type" to "p2p"
+        )
+        // Use merge to avoid overwriting existing unread counts or last messages
+        userChatRef.set(data, SetOptions.merge())
+    }
     private fun updateTypingStatus(isTyping: Boolean) {
         val currentUid = auth.currentUser?.uid ?: return
         val id = chatId ?: return
@@ -354,7 +369,10 @@ class ChatConversationActivity : AppCompatActivity() {
                 "senderId" to currentUid,
                 "content" to text,
                 "timestamp" to FieldValue.serverTimestamp(),
-                "type" to "text"
+                "type" to "text",
+                "status" to "sent",         // Match your class default
+                "readBy" to emptyList<String>(),    // Add this
+                "deletedBy" to emptyList<String>()
             )
 
             db.collection("chats").document(id)
@@ -373,28 +391,39 @@ class ChatConversationActivity : AppCompatActivity() {
             "senderId" to senderId,
             "timestamp" to FieldValue.serverTimestamp()
         )
-        
-        val batch = db.batch()
+
         val chatRef = db.collection("chats").document(chatId)
-        batch.update(chatRef, "lastMessage", lastMessageData)
-        
+
         chatRef.get().addOnSuccessListener { doc ->
+            if (!doc.exists()) return@addOnSuccessListener
+
+            val batch = db.batch()
+
+            // Update main chat object
+            batch.update(chatRef, "lastMessage", lastMessageData)
+
             val members = doc.get("members") as? List<*>
             members?.forEach { memberId ->
                 val uid = memberId.toString()
                 val userChatRef = db.collection("userChats").document(uid).collection("chats").document(chatId)
+
+                // USE SET with MERGE instead of UPDATE here.
+                // If the document doesn't exist, UPDATE will crash. SET will create it.
                 batch.set(userChatRef, mapOf("lastMessage" to lastMessageData), SetOptions.merge())
+
                 if (uid != senderId) {
                     batch.update(userChatRef, "unreadCount", FieldValue.increment(1))
                 }
             }
+
             batch.commit().addOnFailureListener { e ->
-                Log.e("ChatConversation", "Failed to update last message batch", e)
+                Log.e("ChatConversation", "Batch failed: ${e.message}")
             }
         }
     }
 
     private fun listenForMessages(chatId: String) {
+        val currentUid = auth.currentUser?.uid ?: return
         messageListener?.remove()
         messageListener = db.collection("chats").document(chatId)
             .collection("messages").orderBy("timestamp", Query.Direction.ASCENDING)
@@ -406,9 +435,11 @@ class ChatConversationActivity : AppCompatActivity() {
 
                 if (snapshot != null) {
                     val messages = snapshot.toObjects(Message::class.java)
-                    messageAdapter.submitList(messages)
-                    if (messages.isNotEmpty()) {
-                        binding.messagesRecyclerView.scrollToPosition(messages.size - 1)
+                    // Filter out messages that have been deleted by the current user
+                    val filteredMessages = messages.filter { !it.deletedBy.contains(currentUid) }
+                    messageAdapter.submitList(filteredMessages)
+                    if (filteredMessages.isNotEmpty()) {
+                        binding.messagesRecyclerView.scrollToPosition(filteredMessages.size - 1)
                     }
                 }
             }
@@ -464,7 +495,8 @@ class ChatConversationActivity : AppCompatActivity() {
                     "senderId" to currentUid,
                     "timestamp" to FieldValue.serverTimestamp(),
                     "type" to type,
-                    "content" to downloadUri.toString()
+                    "content" to downloadUri.toString(),
+                    "deletedBy" to emptyList<String>()
                 )
                 db.collection("chats").document(id).collection("messages").add(messageData)
                     .addOnSuccessListener { docRef ->

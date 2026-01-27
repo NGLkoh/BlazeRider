@@ -8,6 +8,7 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
@@ -27,6 +28,7 @@ import java.util.*
 class MyRidesFragment : Fragment() {
 
     private lateinit var recyclerView: RecyclerView
+    private lateinit var noRidesText: TextView
     private lateinit var adapter: MyRidesAdapter
     private val firestore = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
@@ -38,10 +40,15 @@ class MyRidesFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View? {
         val view = inflater.inflate(R.layout.fragment_my_rides, container, false)
+
+        // Initialize views
         recyclerView = view.findViewById(R.id.my_rides_recycler_view)
+        noRidesText = view.findViewById(R.id.no_rides_text)
+
         recyclerView.layoutManager = LinearLayoutManager(context)
         adapter = MyRidesAdapter()
         recyclerView.adapter = adapter
+
         fetchMyRides()
         return view
     }
@@ -66,10 +73,19 @@ class MyRidesFragment : Fragment() {
                     }
                 } ?: emptyList()
 
-                // Only show rides that are not completed and where the user is either the creator or a joiner
+                // Filter for active rides where user is creator or joiner
                 val myRides = allRides.filter { ride ->
                     (ride.userUid == userId || ride.joinedRiders?.containsKey(userId) == true) &&
-                    ride.status != "completed" && ride.status != "cancelled"
+                            ride.status != "completed" && ride.status != "cancelled"
+                }
+
+                // Toggle Empty State Visibility
+                if (myRides.isEmpty()) {
+                    recyclerView.visibility = View.GONE
+                    noRidesText.visibility = View.VISIBLE
+                } else {
+                    recyclerView.visibility = View.VISIBLE
+                    noRidesText.visibility = View.GONE
                 }
 
                 adapter.submitList(myRides)
@@ -99,7 +115,7 @@ class MyRidesFragment : Fragment() {
         inner class ViewHolder(private val binding: ItemRidesBinding) : RecyclerView.ViewHolder(binding.root) {
             fun bind(ride: SharedRide) {
                 val userId = auth.currentUser?.uid ?: return
-                
+
                 ride.userUid?.let { uid ->
                     firestore.collection("users").document(uid).get()
                         .addOnSuccessListener { userDoc ->
@@ -118,12 +134,13 @@ class MyRidesFragment : Fragment() {
                 binding.destination.text = "Destination: ${ride.destination}"
                 binding.distance.text = "Distance: ${ride.distance?.let { String.format("%.2f km", it) } ?: "Unknown"}"
                 binding.duration.text = "Duration: ${formatDuration(ride.duration)}"
+
                 val ridersCount = ride.joinedRiders?.size ?: 0
                 binding.rideNumbers.text = "$ridersCount ${if (ridersCount <= 1) "rider" else "riders"} joined"
 
                 binding.joinRideBtn.visibility = View.GONE
                 binding.previewRideBtn.visibility = View.GONE
-                
+
                 val isRideCreator = ride.userUid == userId
                 if (isRideCreator) {
                     binding.startRouteBtn.visibility = View.VISIBLE
@@ -142,15 +159,15 @@ class MyRidesFragment : Fragment() {
                     if (currentLatLng != null) {
                         val destLat = ride.destinationCoordinates?.get("latitude") ?: 0.0
                         val destLng = ride.destinationCoordinates?.get("longitude") ?: 0.0
-                        
+
                         val results = FloatArray(1)
                         Location.distanceBetween(
                             currentLatLng.latitude, currentLatLng.longitude,
                             destLat, destLng, results
                         )
-                        
+
                         val distanceInMeters = results[0]
-                        if (distanceInMeters < 100) { // If within 100 meters
+                        if (distanceInMeters < 100) {
                             binding.arrivedBtn.isEnabled = true
                             binding.arrivedBtn.alpha = 1.0f
                         } else {
@@ -165,27 +182,15 @@ class MyRidesFragment : Fragment() {
                     val destLng = ride.destinationCoordinates?.get("longitude")
 
                     if (destLat != null && destLng != null) {
-                        val originLat = ride.originCoordinates?.get("latitude")
-                        val originLng = ride.originCoordinates?.get("longitude")
-
-                        val uriString = if (originLat != null && originLng != null) {
-                            "http://maps.google.com/maps?saddr=$originLat,$originLng&daddr=$destLat,$destLng"
-                        } else {
-                            "http://maps.google.com/maps?daddr=$destLat,$destLng"
-                        }
-
-                        val gmmIntentUri = Uri.parse(uriString)
+                        val gmmIntentUri = Uri.parse("google.navigation:q=$destLat,$destLng")
                         val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
                         mapIntent.setPackage("com.google.android.apps.maps")
 
                         if (context?.packageManager?.let { mapIntent.resolveActivity(it) } != null) {
                             startActivity(mapIntent)
                         } else {
-                            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(uriString))
-                            startActivity(browserIntent)
+                            Toast.makeText(requireContext(), "Google Maps is not installed", Toast.LENGTH_SHORT).show()
                         }
-                    } else {
-                        Toast.makeText(requireContext(), "Destination not set for this ride.", Toast.LENGTH_SHORT).show()
                     }
                 }
 
@@ -251,16 +256,12 @@ class MyRidesFragment : Fragment() {
                 )
 
                 val batch = firestore.batch()
-                
-                // 1. Clear currentJoinedRide for the user
                 val userRef = firestore.collection("users").document(userId)
                 batch.update(userRef, "currentJoinedRide", null)
-                
-                // 2. Add to user's ride history
+
                 val historyRef = firestore.collection("users").document(userId).collection("rideHistory").document()
                 batch.set(historyRef, rideHistory)
 
-                // 3. If creator, mark the whole ride as completed in sharedRoutes
                 if (isRideCreator) {
                     val rideRef = firestore.collection("sharedRoutes").document(rideId)
                     batch.update(rideRef, "status", "completed")
@@ -268,19 +269,14 @@ class MyRidesFragment : Fragment() {
 
                 batch.commit().addOnSuccessListener {
                     if (isAdded) {
-                        Toast.makeText(requireContext(), "Ride completed and added to history!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(requireContext(), "Ride completed!", Toast.LENGTH_SHORT).show()
                     }
-                    
-                    // If joiner, remove from joinedRiders map
                     if (!isRideCreator && ride.joinedRiders?.containsKey(userId) == true) {
                         firestore.collection("sharedRoutes").document(rideId)
                             .update("joinedRiders.$userId", com.google.firebase.firestore.FieldValue.delete())
                     }
                 }.addOnFailureListener { e ->
-                    Log.e(TAG, "Error completing ride: ${e.message}")
-                    if (isAdded) {
-                        Toast.makeText(requireContext(), "Failed to complete ride", Toast.LENGTH_SHORT).show()
-                    }
+                    Log.e(TAG, "Error: ${e.message}")
                 }
             }
 
@@ -289,21 +285,11 @@ class MyRidesFragment : Fragment() {
                 val rideId = ride.sharedRoutesId ?: return
 
                 val batch = firestore.batch()
-                val userRef = firestore.collection("users").document(userId)
-                batch.update(userRef, "currentJoinedRide", null)
-                
-                val rideRef = firestore.collection("sharedRoutes").document(rideId)
-                batch.update(rideRef, "joinedRiders.$userId", com.google.firebase.firestore.FieldValue.delete())
+                batch.update(firestore.collection("users").document(userId), "currentJoinedRide", null)
+                batch.update(firestore.collection("sharedRoutes").document(rideId), "joinedRiders.$userId", com.google.firebase.firestore.FieldValue.delete())
 
                 batch.commit().addOnSuccessListener {
-                    if (isAdded) {
-                        Toast.makeText(requireContext(), "You left the ride", Toast.LENGTH_SHORT).show()
-                    }
-                }.addOnFailureListener { e ->
-                    Log.e(TAG, "Error leaving ride: ${e.message}")
-                    if (isAdded) {
-                        Toast.makeText(requireContext(), "Failed to leave ride", Toast.LENGTH_SHORT).show()
-                    }
+                    if (isAdded) Toast.makeText(requireContext(), "You left the ride", Toast.LENGTH_SHORT).show()
                 }
             }
 
@@ -313,43 +299,22 @@ class MyRidesFragment : Fragment() {
 
                 firestore.runTransaction { transaction ->
                     val rideRef = firestore.collection("sharedRoutes").document(rideId)
-                    val userRef = firestore.collection("users").document(userId)
-                    
-                    // Mark ride as cancelled
                     transaction.update(rideRef, "status", "cancelled")
-                    
-                    // Clear creator's currentJoinedRide
-                    transaction.update(userRef, "currentJoinedRide", null)
-                    
-                    // Clear currentJoinedRide for all joined riders and notify them
+                    transaction.update(firestore.collection("users").document(userId), "currentJoinedRide", null)
+
                     ride.joinedRiders?.keys?.forEach { riderId ->
-                        val riderRef = firestore.collection("users").document(riderId)
-                        transaction.update(riderRef, "currentJoinedRide", null)
-                        
-                        // Add notification for each rider
-                        val notificationRef = firestore.collection("users").document(riderId)
-                            .collection("notifications").document()
-                        val notification = mapOf(
+                        transaction.update(firestore.collection("users").document(riderId), "currentJoinedRide", null)
+                        val notifRef = firestore.collection("users").document(riderId).collection("notifications").document()
+                        transaction.set(notifRef, mapOf(
                             "actorId" to userId,
                             "createdAt" to Timestamp.now(),
-                            "entityId" to rideId,
-                            "entityType" to "ride",
-                            "message" to "The ride from ${ride.origin} to ${ride.destination} has been cancelled by the creator.",
+                            "message" to "The ride from ${ride.origin} has been cancelled.",
                             "type" to "ride_cancelled",
-                            "isRead" to false,
-                            "updatedAt" to Timestamp.now()
-                        )
-                        transaction.set(notificationRef, notification)
+                            "isRead" to false
+                        ))
                     }
                 }.addOnSuccessListener {
-                    if (isAdded) {
-                        Toast.makeText(requireContext(), "Ride cancelled successfully", Toast.LENGTH_SHORT).show()
-                    }
-                }.addOnFailureListener { e ->
-                    Log.e(TAG, "Error cancelling ride: ${e.message}")
-                    if (isAdded) {
-                        Toast.makeText(requireContext(), "Failed to cancel ride", Toast.LENGTH_SHORT).show()
-                    }
+                    if (isAdded) Toast.makeText(requireContext(), "Ride cancelled", Toast.LENGTH_SHORT).show()
                 }
             }
 

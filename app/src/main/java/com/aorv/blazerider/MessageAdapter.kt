@@ -21,6 +21,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.google.android.material.imageview.ShapeableImageView
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import java.text.SimpleDateFormat
 import java.util.*
@@ -57,10 +58,15 @@ class MessageAdapter(
     private fun showContextMenu(view: View, message: Message) {
         val popup = PopupMenu(view.context, view)
         popup.inflate(R.menu.message_context_menu)
+        
+        // Hide Unsend if not the sender
+        val unsendItem = popup.menu.findItem(R.id.action_unsend)
+        unsendItem.isVisible = message.senderId == currentUserId && message.type != "unsent"
+
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 R.id.action_unsend -> { unsendMessage(message); true }
-                R.id.action_delete -> { deleteMessage(message); true }
+                R.id.action_delete -> { deleteMessageForMe(message); true }
                 else -> false
             }
         }
@@ -74,10 +80,19 @@ class MessageAdapter(
             .addOnSuccessListener { updateLastMessageForUnsend(message) }
     }
 
-    private fun deleteMessage(message: Message) {
+    private fun deleteMessageForMe(message: Message) {
         if (chatId.isEmpty()) return
-        db.collection("chats").document(chatId).collection("messages").document(message.id)
-            .delete().addOnSuccessListener { updateLastMessageAfterDelete(message) }
+        val messageRef = db.collection("chats").document(chatId).collection("messages").document(message.id)
+        
+        // Add current user to deletedBy list instead of deleting the document
+        messageRef.update("deletedBy", FieldValue.arrayUnion(currentUserId))
+            .addOnSuccessListener {
+                Log.d("MessageAdapter", "Message hidden for user $currentUserId")
+                // No need to update last message globally, as it should still be visible to others
+            }
+            .addOnFailureListener { e ->
+                Log.e("MessageAdapter", "Error hiding message", e)
+            }
     }
 
     private fun updateLastMessageForUnsend(message: Message) {
@@ -97,49 +112,6 @@ class MessageAdapter(
                     batch.update(db.collection("userChats").document(uid).collection("chats").document(chatId), "lastMessage", updatedLastMessage)
                 }
                 batch.commit()
-            }
-        }
-    }
-
-    private fun updateLastMessageAfterDelete(deletedMessage: Message) {
-        if (chatId.isEmpty()) return
-        val chatRef = db.collection("chats").document(chatId)
-        chatRef.get().addOnSuccessListener { chatDoc ->
-            if (!chatDoc.exists()) return@addOnSuccessListener
-            val lastMessage = chatDoc.get("lastMessage") as? Map<*, *>
-            if (lastMessage?.get("id") == deletedMessage.id) {
-                db.collection("chats").document(chatId).collection("messages")
-                    .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING).limit(1).get()
-                    .addOnSuccessListener { messages ->
-                        val newLastMessage: Map<String, Any?>? = if (messages.isEmpty) null else {
-                            val doc = messages.documents[0]
-                            val msg = doc.toObject(Message::class.java)
-                            if (msg != null) {
-                                val content = when (msg.type) {
-                                    "text" -> msg.content
-                                    "image" -> "📷 Image"
-                                    "file" -> "📎 File"
-                                    else -> "Message"
-                                }
-                                mapOf<String, Any?>(
-                                    "id" to doc.id,
-                                    "content" to content,
-                                    "senderId" to msg.senderId,
-                                    "timestamp" to msg.timestamp
-                                )
-                            } else {
-                                null
-                            }
-                        }
-                        val batch = db.batch()
-                        batch.update(chatRef, "lastMessage", newLastMessage)
-                        val members = chatDoc.get("members") as? List<*>
-                        members?.forEach { userId ->
-                             val uid = userId.toString()
-                             batch.update(db.collection("userChats").document(uid).collection("chats").document(chatId), "lastMessage", newLastMessage)
-                        }
-                        batch.commit()
-                    }
             }
         }
     }
@@ -164,13 +136,9 @@ class MessageViewHolder(
         val isCurrentUser = message.senderId == currentUserId
 
         messageContentWrapper.setOnClickListener(null)
-        messageContentWrapper.setOnLongClickListener(null)
-
-        if (isCurrentUser) {
-            messageContentWrapper.setOnLongClickListener { 
-                onLongClick(it)
-                true
-            }
+        messageContentWrapper.setOnLongClickListener { 
+            onLongClick(it)
+            true
         }
 
         when (message.type) {
