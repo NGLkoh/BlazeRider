@@ -9,12 +9,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:paddingLeft="24dp"
-        android:paddingRight="24dp"
-        android:paddingTop="24dp"
-        android:paddingBottom="24dp">
+        android:padding="24dp">
 
-        <!-- User Info -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -53,7 +49,6 @@
                     android:textSize="14sp"
                     android:textIsSelectable="true" />
 
-                <!-- Edit Profile Button -->
                 <LinearLayout
                     android:id="@+id/edit_profile"
                     android:layout_width="wrap_content"
@@ -83,20 +78,16 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- Divider -->
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:layout_marginVertical="16dp"
-            android:background="#000000" />
+            android:background="#DDDDDD" />
 
-        <!-- Menu Items -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:divider="?android:attr/dividerHorizontal"
-            android:orientation="vertical"
-            android:showDividers="middle">
+            android:orientation="vertical">
 
             <LinearLayout
                 android:id="@+id/notification"
@@ -110,10 +101,9 @@
                 android:paddingVertical="12dp">
 
                 <ImageView
-                    android:layout_width="13dp"
+                    android:layout_width="24dp"
                     android:layout_height="24dp"
                     android:layout_marginEnd="16dp"
-                    android:contentDescription="notifications"
                     android:src="@drawable/ic_notifications" />
 
                 <TextView
@@ -151,10 +141,9 @@
                 android:paddingVertical="12dp">
 
                 <ImageView
-                    android:layout_width="13dp"
+                    android:layout_width="24dp"
                     android:layout_height="24dp"
                     android:layout_marginEnd="16dp"
-                    android:contentDescription="history"
                     android:src="@drawable/ic_history" />
 
                 <TextView
@@ -177,10 +166,9 @@
                 android:paddingVertical="12dp">
 
                 <ImageView
-                    android:layout_width="13dp"
+                    android:layout_width="24dp"
                     android:layout_height="24dp"
                     android:layout_marginEnd="16dp"
-                    android:contentDescription="Change Password Icon"
                     android:src="@drawable/ic_lock" />
 
                 <TextView
@@ -191,7 +179,33 @@
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <!-- Logout -->
+            <LinearLayout
+                android:id="@+id/admin_list_item"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?android:attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="12dp">
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_marginEnd="16dp"
+                    android:src="@drawable/ic_user"
+                    app:tint="?android:attr/textColorPrimary" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Admin Management"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
             <LinearLayout
                 android:id="@+id/logout_item"
                 android:layout_width="match_parent"
@@ -207,9 +221,8 @@
                     android:layout_width="24dp"
                     android:layout_height="24dp"
                     android:layout_marginEnd="16dp"
-                    android:contentDescription="Logout Icon"
                     android:src="@drawable/ic_exit"
-                    app:tint="@color/red_orange" />
+                    app:tint="#B22222" />
 
                 <TextView
                     android:layout_width="wrap_content"

@@ -26,6 +26,7 @@ import com.android.volley.toolbox.JsonArrayRequest
 import com.android.volley.toolbox.Volley
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.imageview.ShapeableImageView
+import com.google.android.material.textfield.TextInputLayout
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
@@ -49,6 +50,7 @@ class EditProfileActivity : AppCompatActivity() {
     private val barangays = mutableListOf<String>()
     private var selectedProvinceCode: String? = null
     private var selectedCityCode: String? = null
+    private var isAdminUser: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,6 +80,14 @@ class EditProfileActivity : AppCompatActivity() {
         val address = findViewById<EditText>(R.id.address)
         val btnSaveChanges = findViewById<Button>(R.id.btnSaveChanges)
         val scrollView = findViewById<ScrollView>(R.id.scrollView)
+
+        // Layout wrappers
+        val birthdateLayout = findViewById<TextInputLayout>(R.id.birthdateLayout)
+        val genderLayout = findViewById<TextInputLayout>(R.id.genderLayout)
+        val provinceLayout = findViewById<TextInputLayout>(R.id.provinceLayout)
+        val cityLayout = findViewById<TextInputLayout>(R.id.cityLayout)
+        val barangayLayout = findViewById<TextInputLayout>(R.id.barangayLayout)
+        val addressLayout = findViewById<TextInputLayout>(R.id.addressLayout)
 
         // Apply system bar insets to ScrollView
         ViewCompat.setOnApplyWindowInsetsListener(scrollView) { v, insets ->
@@ -166,20 +176,56 @@ class EditProfileActivity : AppCompatActivity() {
         val user = auth.currentUser
         if (user != null) {
             email.setText(user.email)
+
+            // Check if hardcoded admin
+            if (user.uid == "A7USXq3qwFgCH4sov6mmPdtaGOn2") {
+                isAdminUser = true
+                hideAdminFields(birthdateLayout, genderLayout, provinceLayout, cityLayout, barangayLayout, addressLayout)
+            }
+
             db.collection("users").document(user.uid).get()
                 .addOnSuccessListener { document ->
                     if (document.exists()) {
+                        // Re-check admin status from Firestore
+                        val adminVal = document.get("admin")
+                        if (adminVal == true || adminVal == "true" || adminVal == 1L) {
+                            isAdminUser = true
+                            hideAdminFields(birthdateLayout, genderLayout, provinceLayout, cityLayout, barangayLayout, addressLayout)
+                        }
+
                         firstName.setText(document.getString("firstName"))
                         lastName.setText(document.getString("lastName"))
-                        document.getTimestamp("birthdate")?.let { timestamp ->
-                            val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
-                            birthdate.setText(dateFormat.format(timestamp.toDate()))
+                        
+                        if (!isAdminUser) {
+                            document.getTimestamp("birthdate")?.let { timestamp ->
+                                val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+                                birthdate.setText(dateFormat.format(timestamp.toDate()))
+                            }
+                            gender.setText(document.getString("gender"), false)
+                            val province = document.getString("province")
+                            val city = document.getString("city")
+                            val barangay = document.getString("barangay")
+                            address.setText(document.getString("address"))
+                            
+                            province?.let {
+                                provinceDropdown.setText(it, false)
+                                selectedProvinceCode = provinces.find { p -> p.first == it }?.second
+                                if (selectedProvinceCode != null) {
+                                    fetchCities(selectedProvinceCode!!)
+                                    city?.let {
+                                        cityDropdown.setText(it, false)
+                                        selectedCityCode = cities.find { c -> c.first == it }?.second
+                                        if (selectedCityCode != null) {
+                                            fetchBarangays(selectedProvinceCode!!, selectedCityCode!!)
+                                            barangay?.let {
+                                                barangayDropdown.setText(it, false)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
-                        gender.setText(document.getString("gender"), false)
-                        val province = document.getString("province")
-                        val city = document.getString("city")
-                        val barangay = document.getString("barangay")
-                        address.setText(document.getString("address"))
+
                         document.getString("profileImageUrl")?.let { url ->
                             if (url.isNotEmpty()) {
                                 Glide.with(this@EditProfileActivity)
@@ -191,23 +237,6 @@ class EditProfileActivity : AppCompatActivity() {
                                 profileImage.setImageResource(R.drawable.ic_blank)
                             }
                         } ?: profileImage.setImageResource(R.drawable.ic_blank)
-                        province?.let {
-                            provinceDropdown.setText(it, false)
-                            selectedProvinceCode = provinces.find { p -> p.first == it }?.second
-                            if (selectedProvinceCode != null) {
-                                fetchCities(selectedProvinceCode!!)
-                                city?.let {
-                                    cityDropdown.setText(it, false)
-                                    selectedCityCode = cities.find { c -> c.first == it }?.second
-                                    if (selectedCityCode != null) {
-                                        fetchBarangays(selectedProvinceCode!!, selectedCityCode!!)
-                                        barangay?.let {
-                                            barangayDropdown.setText(it, false)
-                                        }
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
                 .addOnFailureListener {
@@ -220,54 +249,63 @@ class EditProfileActivity : AppCompatActivity() {
 
         // Save changes
         btnSaveChanges.setOnClickListener {
-            when {
-                firstName.text.isEmpty() -> {
-                    firstName.error = "First name is required"
-                    firstName.requestFocus()
-                    return@setOnClickListener
-                }
-                lastName.text.isEmpty() -> {
-                    lastName.error = "Last name is required"
-                    lastName.requestFocus()
-                    return@setOnClickListener
-                }
-                birthdate.text.isEmpty() -> {
+            if (firstName.text.isEmpty()) {
+                firstName.error = "First name is required"
+                firstName.requestFocus()
+                return@setOnClickListener
+            }
+            if (lastName.text.isEmpty()) {
+                lastName.error = "Last name is required"
+                lastName.requestFocus()
+                return@setOnClickListener
+            }
+
+            if (!isAdminUser) {
+                if (birthdate.text.isEmpty()) {
                     birthdate.error = "Birthdate is required"
                     birthdate.requestFocus()
                     return@setOnClickListener
                 }
-                gender.text.isEmpty() -> {
+                if (gender.text.isEmpty()) {
                     gender.error = "Gender is required"
                     gender.requestFocus()
                     return@setOnClickListener
                 }
-                provinceDropdown.text.isEmpty() -> {
+                if (provinceDropdown.text.isEmpty()) {
                     provinceDropdown.error = "Province is required"
                     provinceDropdown.requestFocus()
                     return@setOnClickListener
                 }
-                cityDropdown.text.isEmpty() -> {
+                if (cityDropdown.text.isEmpty()) {
                     cityDropdown.error = "City is required"
                     cityDropdown.requestFocus()
                     return@setOnClickListener
                 }
-                barangayDropdown.text.isEmpty() -> {
+                if (barangayDropdown.text.isEmpty()) {
                     barangayDropdown.error = "Barangay is required"
                     barangayDropdown.requestFocus()
                     return@setOnClickListener
                 }
-                address.text.isEmpty() -> {
+                if (address.text.isEmpty()) {
                     address.error = "Address is required"
                     address.requestFocus()
                     return@setOnClickListener
                 }
-                else -> {
-                    val user = auth.currentUser
-                    if (user != null) {
-                        // Parse birthdate to Timestamp
-                        val birthdateString = birthdate.text.toString()
-                        val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
-                        dateFormat.isLenient = false
+            }
+
+            val user = auth.currentUser
+            if (user != null) {
+                val userData = mutableMapOf<String, Any>(
+                    "firstName" to firstName.text.toString(),
+                    "lastName" to lastName.text.toString()
+                )
+
+                if (!isAdminUser) {
+                    // Parse birthdate to Timestamp
+                    val birthdateString = birthdate.text.toString()
+                    val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+                    dateFormat.isLenient = false
+                    try {
                         val date = dateFormat.parse(birthdateString)
                         val calendar = Calendar.getInstance().apply {
                             time = date
@@ -276,49 +314,50 @@ class EditProfileActivity : AppCompatActivity() {
                             set(Calendar.SECOND, 0)
                             set(Calendar.MILLISECOND, 0)
                         }
-                        val birthdateTimestamp = com.google.firebase.Timestamp(calendar.time)
-
-                        val userData = mutableMapOf<String, Any>(
-                            "firstName" to firstName.text.toString(),
-                            "lastName" to lastName.text.toString(),
-                            "birthdate" to birthdateTimestamp,
-                            "gender" to gender.text.toString(),
-                            "province" to provinceDropdown.text.toString(),
-                            "city" to cityDropdown.text.toString(),
-                            "barangay" to barangayDropdown.text.toString(),
-                            "address" to address.text.toString(),
-                            "verified" to true
-                        )
-
-                        // Add the user's email to the data to be saved
-                        user.email?.let {
-                            userData["email"] = it
-                        }
-
-                        if (profileImageUri != null) {
-                            val storageRef = storage.reference.child("profile_images/${user.uid}.jpg")
-                            storageRef.putFile(profileImageUri!!).addOnSuccessListener {
-                                storageRef.downloadUrl.addOnSuccessListener { downloadUrl ->
-                                    userData["profileImageUrl"] = downloadUrl.toString()
-                                    saveUserData(user.uid, userData)
-                                }
-                            }.addOnFailureListener {
-                                Toast.makeText(this, "Failed to upload image.", Toast.LENGTH_SHORT).show()
-                                saveUserData(user.uid, userData)
-                            }
-                        } else {
-                            saveUserData(user.uid, userData)
-                        }
-                    } else {
-                        Toast.makeText(this, "User not logged in.", Toast.LENGTH_SHORT).show()
+                        userData["birthdate"] = com.google.firebase.Timestamp(calendar.time)
+                    } catch (e: Exception) {
+                        // Handle parse error if necessary
                     }
+                    userData["gender"] = gender.text.toString()
+                    userData["province"] = provinceDropdown.text.toString()
+                    userData["city"] = cityDropdown.text.toString()
+                    userData["barangay"] = barangayDropdown.text.toString()
+                    userData["address"] = address.text.toString()
+                    userData["verified"] = true
                 }
+
+                // Add the user's email to the data to be saved
+                user.email?.let {
+                    userData["email"] = it
+                }
+
+                if (profileImageUri != null) {
+                    val storageRef = storage.reference.child("profile_images/${user.uid}.jpg")
+                    storageRef.putFile(profileImageUri!!).addOnSuccessListener {
+                        storageRef.downloadUrl.addOnSuccessListener { downloadUrl ->
+                            userData["profileImageUrl"] = downloadUrl.toString()
+                            updateUserData(user.uid, userData)
+                        }
+                    }.addOnFailureListener {
+                        Toast.makeText(this, "Failed to upload image.", Toast.LENGTH_SHORT).show()
+                        updateUserData(user.uid, userData)
+                    }
+                } else {
+                    updateUserData(user.uid, userData)
+                }
+            } else {
+                Toast.makeText(this, "User not logged in.", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
-    private fun saveUserData(uid: String, userData: Map<String, Any>) {
-        db.collection("users").document(uid).set(userData)
+    private fun hideAdminFields(vararg layouts: View) {
+        layouts.forEach { it.visibility = View.GONE }
+    }
+
+    private fun updateUserData(uid: String, userData: Map<String, Any>) {
+        // Use update instead of set to avoid overwriting other fields like 'admin'
+        db.collection("users").document(uid).update(userData)
             .addOnSuccessListener {
                 Toast.makeText(this, "Profile updated successfully.", Toast.LENGTH_SHORT).show()
                 finish()

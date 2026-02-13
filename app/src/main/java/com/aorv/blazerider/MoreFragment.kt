@@ -56,13 +56,15 @@ class MoreFragment : Fragment() {
         val changePasswordLayout = view.findViewById<LinearLayout>(R.id.change_password)
         val notificationLayout = view.findViewById<LinearLayout>(R.id.notification)
         val notificationCountTextView = view.findViewById<TextView>(R.id.notification_count)
+        val adminListLayout = view.findViewById<LinearLayout>(R.id.admin_list_item)
 
         // Set visibility of edit_profile (now visible for both admin and regular users)
         view.findViewById<View>(R.id.edit_profile).visibility = View.VISIBLE
-        
+
         historyLayout.visibility = if (isAdmin) View.GONE else View.VISIBLE
         changePasswordLayout.visibility = if (isAdmin) View.GONE else View.VISIBLE
         notificationLayout.visibility = if (isAdmin) View.GONE else View.VISIBLE
+        adminListLayout.visibility = if (isAdmin) View.VISIBLE else View.GONE
 
         // Get current user
         val currentUser = auth.currentUser
@@ -157,6 +159,12 @@ class MoreFragment : Fragment() {
             val intent = Intent(requireContext(), ChangePasswordActivity::class.java)
             startActivity(intent)
         }
+
+        adminListLayout.setOnClickListener {
+            val intent = Intent(requireContext(), AddAdminActivity::class.java)
+            startActivity(intent)
+        }
+
 
         view.findViewById<View>(R.id.logout_item).setOnClickListener {
             showLogoutDialog()

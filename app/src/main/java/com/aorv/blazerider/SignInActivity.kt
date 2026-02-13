@@ -56,7 +56,7 @@ class SignInActivity : AppCompatActivity() {
         btnSignIn.setOnClickListener {
             val emailText = email.text.toString().trim()
             val pwd = password.text.toString().trim()
-            val isRememberMeChecked = cbRememberMe.isChecked // Capture state at the time of click
+            val isRememberMeChecked = cbRememberMe.isChecked
 
             if (emailText.isEmpty() || pwd.isEmpty()) {
                 Toast.makeText(this, "Please fill out all fields.", Toast.LENGTH_SHORT).show()
@@ -67,65 +67,87 @@ class SignInActivity : AppCompatActivity() {
                 .addOnSuccessListener { result ->
                     val editor = loginPreferences.edit()
                     if (isRememberMeChecked) {
-                        // Save credentials and the "remember me" flag
                         editor.putString(KEY_EMAIL, emailText)
                         editor.putString(KEY_PASSWORD, pwd)
                         editor.putBoolean(KEY_REMEMBER_ME, true)
                     } else {
-                        // Clear all login preferences
                         editor.clear()
                     }
-                    editor.commit() // Use synchronous commit for certainty
+                    editor.commit()
 
                     val uid = result.user?.uid ?: return@addOnSuccessListener
-
-                    // Special handling for the specified admin user ID
-                    if (uid == "A7USXq3qwFgCH4sov6mmPdtaGOn2") {
-                        startActivity(Intent(this, AdminActivity::class.java))
-                        overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
-                        finish()
-                        return@addOnSuccessListener
-                    }
-
-                    db.collection("users").document(uid).get()
-                        .addOnSuccessListener { document ->
-                            if (document.exists()) {
-                                val verified = document.getBoolean("verified") ?: false
-                                val stepCompleted = document.getLong("stepCompleted")?.toInt() ?: 1
-
-                                val isAdmin = when (val adminValue = document.get("admin")) {
-                                    is Boolean -> adminValue
-                                    is String -> adminValue.toBooleanStrictOrNull() ?: false
-                                    is Long -> adminValue == 1L // Treat 1 as true, anything else as false
-                                    else -> false
-                                }
-
-                                if (isAdmin) {
-                                    startActivity(Intent(this, AdminActivity::class.java))
-                                } else if (verified) {
-                                    startActivity(Intent(this, HomeActivity::class.java))
-                                } else {
-                                    val intent = when (stepCompleted) {
-                                        1 -> Intent(this, EmailVerificationActivity::class.java)
-                                        2 -> Intent(this, CurrentAddressActivity::class.java)
-                                        3 -> Intent(this, AdminApprovalActivity::class.java)
-                                        else -> Intent(this, EmailVerificationActivity::class.java)
-                                    }
-                                    startActivity(intent)
-                                }
-                                overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
-                                finish()
-                            } else {
-                                Toast.makeText(this, "User not registered. Please Sign Up to login", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                        .addOnFailureListener { e ->
-                            Toast.makeText(this, "Failed to fetch user data: ${e.message}", Toast.LENGTH_SHORT).show()
-                        }
+                    handleUserRouting(uid)
                 }
                 .addOnFailureListener { exception ->
                     Toast.makeText(this, "Sign-in failed: ${exception.message}", Toast.LENGTH_SHORT).show()
                 }
         }
+    }
+
+    /**
+     * This method runs when the activity starts.
+     * It checks if a Firebase session already exists to skip the login screen.
+     */
+    override fun onStart() {
+        super.onStart()
+        val currentUser = auth.currentUser
+        if (currentUser != null) {
+            // User is already logged in, bypass the sign-in UI
+            handleUserRouting(currentUser.uid)
+        }
+    }
+
+    /**
+     * Logic to determine if the user goes to Admin, Home, or Onboarding
+     */
+    private fun handleUserRouting(uid: String) {
+        // Special handling for the hardcoded admin user ID
+        if (uid == "A7USXq3qwFgCH4sov6mmPdtaGOn2") {
+            navigateTo(AdminActivity::class.java)
+            return
+        }
+
+        db.collection("users").document(uid).get()
+            .addOnSuccessListener { document ->
+                if (document.exists()) {
+                    val verified = document.getBoolean("verified") ?: false
+                    val stepCompleted = document.getLong("stepCompleted")?.toInt() ?: 1
+
+                    val isAdmin = when (val adminValue = document.get("admin")) {
+                        is Boolean -> adminValue
+                        is String -> adminValue.toBooleanStrictOrNull() ?: false
+                        is Long -> adminValue == 1L
+                        else -> false
+                    }
+
+                    if (isAdmin) {
+                        navigateTo(AdminActivity::class.java)
+                    } else if (verified) {
+                        navigateTo(HomeActivity::class.java)
+                    } else {
+                        val intentClass = when (stepCompleted) {
+                            1 -> EmailVerificationActivity::class.java
+                            2 -> CurrentAddressActivity::class.java
+                            3 -> AdminApprovalActivity::class.java
+                            else -> EmailVerificationActivity::class.java
+                        }
+                        navigateTo(intentClass)
+                    }
+                } else {
+                    // This handles cases where the auth exists but document was deleted
+                    auth.signOut()
+                    Toast.makeText(this, "User data not found.", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(this, "Error fetching profile: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    private fun navigateTo(cls: Class<*>) {
+        val intent = Intent(this, cls)
+        startActivity(intent)
+        overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
+        finish()
     }
 }

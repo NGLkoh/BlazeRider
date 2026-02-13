@@ -210,7 +210,6 @@
                 android:fontFamily="@font/poppins_medium"
                 android:textSize="14sp" />
         </com.google.android.material.textfield.TextInputLayout>
-
         <!-- Terms and Conditions -->
         <CheckBox
             android:id="@+id/termsAndConditions"

@@ -3,7 +3,6 @@ package com.aorv.blazerider
 import android.app.AlertDialog
 import android.app.DatePickerDialog
 import android.content.Intent
-import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Rect
 import android.os.Bundle
@@ -19,7 +18,6 @@ import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.firestore.FirebaseFirestore
 import java.util.Calendar
 import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.ServerTimestamp
 
 class SignUpActivity : AppCompatActivity() {
 
@@ -33,6 +31,7 @@ class SignUpActivity : AppCompatActivity() {
         auth = FirebaseAuth.getInstance()
         db = FirebaseFirestore.getInstance()
 
+        // Input Fields
         val firstName = findViewById<EditText>(R.id.firstName)
         val lastName = findViewById<EditText>(R.id.lastName)
         val email = findViewById<EditText>(R.id.email)
@@ -40,10 +39,18 @@ class SignUpActivity : AppCompatActivity() {
         val birthdate = findViewById<EditText>(R.id.birthdate)
         val password = findViewById<EditText>(R.id.password)
         val confirmPassword = findViewById<EditText>(R.id.confirmPassword)
+
+        // Layout Containers for Error States (Turning Red)
+        val firstNameLayout = findViewById<TextInputLayout>(R.id.firstNameLayout)
+        val lastNameLayout = findViewById<TextInputLayout>(R.id.lastNameLayout)
+        val emailLayout = findViewById<TextInputLayout>(R.id.emailLayout)
+        val birthdateLayout = findViewById<TextInputLayout>(R.id.birthdateLayout)
+        val passwordLayout = findViewById<TextInputLayout>(R.id.passwordLayout)
+        val confirmPasswordLayout = findViewById<TextInputLayout>(R.id.confirmPasswordLayout)
+
         val btnSignUp = findViewById<Button>(R.id.btnSignUp)
         val assistance = findViewById<TextView>(R.id.passwordAssistance)
         val scrollView = findViewById<ScrollView>(R.id.scrollView)
-        val passwordLayout = findViewById<TextInputLayout>(R.id.passwordLayout)
         val termsAndConditions = findViewById<CheckBox>(R.id.termsAndConditions)
         val defaultColor = termsAndConditions.textColors
 
@@ -63,6 +70,7 @@ class SignUpActivity : AppCompatActivity() {
                 { _, selectedYear, selectedMonth, selectedDay ->
                     val formatted = String.format("%02d/%02d/%04d", selectedDay, selectedMonth + 1, selectedYear)
                     birthdate.setText(formatted)
+                    birthdateLayout.error = null // Clear red error on selection
                 },
                 year, month, day
             )
@@ -70,61 +78,14 @@ class SignUpActivity : AppCompatActivity() {
             datePicker.show()
         }
 
-        // Show/hide password tips and scroll to keep assistance visible
-        password.setOnFocusChangeListener { _, hasFocus ->
-            if (hasFocus && password.text.isNotEmpty()) {
-                assistance.visibility = View.VISIBLE
-                scrollView.postDelayed({
-                    val rect = Rect()
-                    assistance.getGlobalVisibleRect(rect)
-                    scrollView.smoothScrollTo(0, rect.bottom - scrollView.height / 2)
-                }, 300)
-            } else if (!hasFocus) {
-                assistance.visibility = View.GONE
-            }
-        }
-
-        // Ensure scrolling for other fields
-        val fields = listOf(firstName, lastName, email, gender, birthdate, confirmPassword)
-        fields.forEach { field ->
-            field.setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) {
-                    scrollView.postDelayed({
-                        val rect = Rect()
-                        field.getGlobalVisibleRect(rect)
-                        scrollView.smoothScrollTo(0, rect.top - 100) // Offset to show field clearly
-                    }, 300)
-                }
-            }
-        }
-
-        // Password tips updates
-        password.setOnFocusChangeListener { _, hasFocus ->
-            if (hasFocus && password.text.isNotEmpty()) {
-                assistance.visibility = View.VISIBLE
-                scrollView.postDelayed({
-                    val rect = Rect()
-                    assistance.getGlobalVisibleRect(rect)
-                    scrollView.smoothScrollTo(0, rect.bottom - scrollView.height / 2)
-                }, 300)
-            } else if (!hasFocus) {
-                assistance.visibility = View.GONE
-            }
-        }
-
-// Password tips updates
+        // Real-time Password Assistance
         password.addTextChangedListener(object : TextWatcher {
             override fun afterTextChanged(s: Editable?) {
                 val pwd = s.toString()
+                passwordLayout.error = null // Remove red error while typing
 
-                // Show assistance when user starts typing
                 if (pwd.isNotEmpty() && password.hasFocus()) {
                     assistance.visibility = View.VISIBLE
-                    scrollView.postDelayed({
-                        val rect = Rect()
-                        assistance.getGlobalVisibleRect(rect)
-                        scrollView.smoothScrollTo(0, rect.bottom - scrollView.height / 2)
-                    }, 100)
                 } else if (pwd.isEmpty()) {
                     assistance.visibility = View.GONE
                 }
@@ -138,93 +99,96 @@ class SignUpActivity : AppCompatActivity() {
                 }
                 assistance.text = "Password Assistance\n$validText"
             }
-
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
         })
 
-        // Terms and Conditions
+        // Terms and Conditions logic
         termsAndConditions.setOnCheckedChangeListener { _, isChecked ->
             btnSignUp.isEnabled = isChecked
-            if(isChecked) {
-                termsAndConditions.setTextColor(defaultColor)
-            }
+            if (isChecked) termsAndConditions.setTextColor(defaultColor)
         }
 
-        val termsText = "Before you proceed, kindly review our Terms and Conditions. These terms outline how you can properly use the app, how we protect your information, and what rules must be followed to ensure a safe and smooth experience. By continuing, you agree to comply with all the policies written in this agreement."
-        termsAndConditions.setOnClickListener { v ->
-            if (v is CheckBox && !v.isChecked) {
-                AlertDialog.Builder(this)
-                    .setTitle("Terms and Conditions")
-                    .setMessage(termsText)
-                    .setPositiveButton("OK", null)
-                    .show()
-            }
-        }
+        findViewById<ImageButton>(R.id.backButton).setOnClickListener { finish() }
 
-        // Back button
-        findViewById<ImageButton>(R.id.backButton).setOnClickListener {
-            finish()
-        }
-
-        // Sign up
+        // SIGN UP EXECUTION
         btnSignUp.setOnClickListener {
-            if (!termsAndConditions.isChecked) {
-                Toast.makeText(this, "Please agree to the Terms and Conditions.", Toast.LENGTH_SHORT).show()
-                termsAndConditions.setTextColor(Color.RED)
-                return@setOnClickListener
-            }
+            // Hide indicator immediately
+            assistance.visibility = View.GONE
 
+            // Reset all errors to normal state
+            val layouts = listOf(firstNameLayout, lastNameLayout, emailLayout, birthdateLayout, passwordLayout, confirmPasswordLayout)
+            layouts.forEach { it.error = null }
+
+            val fName = firstName.text.toString().trim()
+            val lName = lastName.text.toString().trim()
             val emailText = email.text.toString().trim()
             val pwd = password.text.toString()
+            val dobString = birthdate.text.toString()
 
-            if (firstName.text.isEmpty() || lastName.text.isEmpty() || emailText.isEmpty() ||
-                gender.text.isEmpty() || birthdate.text.isEmpty() || password.text.isEmpty() ||
-                confirmPassword.text.isEmpty()) {
+            // 1. Basic empty check with Red Box triggers
+            var hasError = false
+            if (fName.isEmpty()) { firstNameLayout.error = "First name is required"; hasError = true }
+            if (lName.isEmpty()) { lastNameLayout.error = "Last name is required"; hasError = true }
+            if (emailText.isEmpty()) { emailLayout.error = "Email is required"; hasError = true }
+            if (dobString.isEmpty()) { birthdateLayout.error = "Select birthdate"; hasError = true }
+            if (pwd.isEmpty()) { passwordLayout.error = "Password is required"; hasError = true }
+
+            if (hasError) {
                 Toast.makeText(this, "Please fill out all fields.", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            if (pwd != confirmPassword.text.toString()) {
-                Toast.makeText(this, "Passwords do not match.", Toast.LENGTH_SHORT).show()
+            // 2. Age Validation (18+)
+            val parts = dobString.split("/")
+            val birthDate = Calendar.getInstance().apply {
+                set(parts[2].toInt(), parts[1].toInt() - 1, parts[0].toInt())
+            }
+            val today = Calendar.getInstance()
+            var age = today.get(Calendar.YEAR) - birthDate.get(Calendar.YEAR)
+            if (today.get(Calendar.DAY_OF_YEAR) < birthDate.get(Calendar.DAY_OF_YEAR)) age--
+
+            if (age < 18) {
+                birthdateLayout.error = "Must be 18 or older"
+                Toast.makeText(this, "You must be at least 18 years old.", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
 
+            // 3. Password match check
+            if (pwd != confirmPassword.text.toString()) {
+                confirmPasswordLayout.error = "Passwords do not match"
+                return@setOnClickListener
+            }
+
+            // 4. Create Account
             auth.createUserWithEmailAndPassword(emailText, pwd)
                 .addOnSuccessListener { result ->
                     val uid = result.user?.uid ?: return@addOnSuccessListener
-
                     val userData = mapOf(
-                        "firstName" to firstName.text.toString(),
-                        "lastName" to lastName.text.toString(),
+                        "firstName" to fName,
+                        "lastName" to lName,
                         "email" to emailText,
                         "gender" to gender.text.toString(),
-                        "accountCreated" to FieldValue.serverTimestamp(), // Use server timestamp
+                        "birthdate" to dobString,
+                        "accountCreated" to FieldValue.serverTimestamp(),
                         "stepCompleted" to 1,
                         "verified" to false
                     )
 
                     db.collection("users").document(uid).set(userData)
 
-                    val status = mapOf(
-                        "state" to "online",
-                        "last_changed" to System.currentTimeMillis()
-                    )
+                    val status = mapOf("state" to "online", "last_changed" to System.currentTimeMillis())
                     FirebaseDatabase.getInstance().getReference("status").child(uid).setValue(status)
 
                     startActivity(Intent(this, EmailVerificationActivity::class.java))
                     overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
-
                     finish()
                 }
                 .addOnFailureListener { exception ->
-                    when (exception) {
-                        is FirebaseAuthUserCollisionException -> {
-                            Toast.makeText(this, "Email already exists.", Toast.LENGTH_SHORT).show()
-                        }
-                        else -> {
-                            Toast.makeText(this, "Sign-up failed: ${exception.message}", Toast.LENGTH_SHORT).show()
-                        }
+                    if (exception is FirebaseAuthUserCollisionException) {
+                        emailLayout.error = "Email already exists"
+                    } else {
+                        Toast.makeText(this, "Sign-up failed: ${exception.message}", Toast.LENGTH_SHORT).show()
                     }
                 }
         }

@@ -120,6 +120,15 @@
         <activity
             android:name=".HistoryActivity"
             android:theme="@style/Theme.Material3.DynamicColors.Light.NoActionBar" />
+
+        <activity android:name=".AddAdminActivity"
+            android:theme="@style/Theme.Material3.DynamicColors.Light.NoActionBar"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity android:name=".AdminListActivity"
+            android:theme="@style/Theme.Material3.DynamicColors.Light.NoActionBar"
+            android:windowSoftInputMode="adjustResize" />
+
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyBdsslBjsFC919mvY0osI8hAmrPOzFp_LE"/>
