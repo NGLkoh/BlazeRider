@@ -1,6 +1,9 @@
 package com.aorv.blazerider
 
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.media.RingtoneManager
 import android.os.Bundle
 import android.os.Handler
@@ -22,6 +25,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.updateLayoutParams
 import androidx.fragment.app.Fragment
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.firebase.auth.FirebaseAuth
@@ -55,6 +59,24 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var notificationTitle: TextView
     private lateinit var notificationMessage: TextView
     private lateinit var notificationDismiss: ImageView
+    
+    // Local Broadcast Receiver for in-app banner messages from FCM
+    private val messageBroadcastReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == MyFirebaseMessagingService.NEW_MESSAGE_ACTION) {
+                val content = intent.getStringExtra(MyFirebaseMessagingService.EXTRA_MESSAGE_CONTENT)
+                val chatId = intent.getStringExtra(MyFirebaseMessagingService.EXTRA_CHAT_ID)
+                if (content != null) {
+                    showNotificationBanner(
+                        title = "New Message",
+                        message = content,
+                        type = "message",
+                        entityId = chatId
+                    )
+                }
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -99,19 +121,19 @@ class HomeActivity : AppCompatActivity() {
             } else {
                 lastClickTime = currentTime
                 when (item.itemId) {
-                    R.id.nav_location -> { replaceFragment(LocationFragment()); true }
+                    R.id.nav_location -> { replaceFragment(LocationFragment()); updateOnlineStatus(); true }
                     R.id.nav_announcements -> {
                         replaceFragment(AnnouncementsFragment())
                         updateLastReadAnnouncement()
                         bottomNav.removeBadge(R.id.nav_announcements)
                         true
                     }
-                    R.id.nav_home -> { replaceFragment(FeedFragment()); true }
+                    R.id.nav_home -> { replaceFragment(FeedFragment()); updateOnlineStatus(); true }
                     R.id.nav_shared_rides -> {
                         startActivity(Intent(this, SharedRidesActivity::class.java))
                         true
                     }
-                    R.id.nav_hamburger -> { replaceFragment(MoreFragment()); true }
+                    R.id.nav_hamburger -> { replaceFragment(MoreFragment()); updateOnlineStatus(); true }
                     else -> false
                 }
             }
@@ -244,19 +266,19 @@ class HomeActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        val userId = auth.currentUser?.uid ?: return
-        locationViewModel.lastKnownLocation.observe(this) { location ->
-            val statusData = mapOf(
-                "state" to "online",
-                "lastActive" to System.currentTimeMillis(),
-                "location" to mapOf("latitude" to (location?.latitude ?: 0.0), "longitude" to (location?.longitude ?: 0.0))
-            )
-            FirebaseDatabase.getInstance().reference.child("status").child(userId).setValue(statusData)
-        }
+        updateOnlineStatus()
+        // Register receiver to catch in-app banner notifications from background FCM messages
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+            messageBroadcastReceiver,
+            IntentFilter(MyFirebaseMessagingService.NEW_MESSAGE_ACTION)
+        )
     }
 
     override fun onPause() {
         super.onPause()
+        // Unregister receiver
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(messageBroadcastReceiver)
+
         val userId = auth.currentUser?.uid ?: return
         val location = locationViewModel.lastKnownLocation.value
         val statusData = mapOf(
@@ -333,5 +355,17 @@ class HomeActivity : AppCompatActivity() {
     private fun updateLastReadAnnouncement() {
         val userId = auth.currentUser?.uid ?: return
         db.collection("users").document(userId).update("lastAnnouncementReadAt", Timestamp.now())
+    }
+    
+    private fun updateOnlineStatus() {
+        val userId = auth.currentUser?.uid ?: return
+        locationViewModel.lastKnownLocation.observe(this) { location ->
+            val statusData = mapOf(
+                "state" to "online",
+                "lastActive" to System.currentTimeMillis(),
+                "location" to mapOf("latitude" to (location?.latitude ?: 0.0), "longitude" to (location?.longitude ?: 0.0))
+            )
+            FirebaseDatabase.getInstance().reference.child("status").child(userId).setValue(statusData)
+        }
     }
 }

@@ -5,8 +5,7 @@
     android:id="@+id/comments_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@android:color/white"
-    android:fitsSystemWindows="true">
+    android:background="@android:color/white">
 
     <!-- Main Content -->
     <LinearLayout
@@ -18,11 +17,11 @@
         <androidx.appcompat.widget.Toolbar
             android:id="@+id/comments_toolbar"
             android:layout_width="match_parent"
-            android:layout_height="94dp"
-            android:paddingTop="32dp"
+            android:layout_height="?attr/actionBarSize"
             android:background="@color/red_orange"
             app:title="Comments"
-            app:titleTextColor="@android:color/white">
+            app:titleTextColor="@android:color/white"
+            app:contentInsetStart="16dp">
 
             <LinearLayout
                 android:layout_width="wrap_content"
@@ -40,7 +39,8 @@
                     android:contentDescription="View Post"
                     app:tint="@color/white"
                     android:scaleType="fitCenter"
-                    android:layout_marginEnd="16dp" />
+                    android:layout_marginEnd="16dp"
+                    android:visibility="gone" />
 
                 <ImageButton
                     android:id="@+id/comments_close_button"
@@ -60,47 +60,33 @@
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:layout_marginTop="8dp"
             android:paddingHorizontal="8dp"
             app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
 
-        <!-- No Comments Layout (Inside a FrameLayout to overlay correctly if needed, or just keep it simple) -->
-        <FrameLayout
-            android:id="@+id/no_comments_container"
+        <!-- No Comments Layout -->
+        <LinearLayout
+            android:id="@+id/no_comments_layout"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
             android:visibility="gone">
 
-            <LinearLayout
-                android:id="@+id/no_comments_layout"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:orientation="vertical"
-                android:gravity="center">
+            <ImageView
+                android:layout_width="100dp"
+                android:layout_height="100dp"
+                android:src="@drawable/ic_add_comment"
+                android:contentDescription="Add comment icon" />
 
-                <ImageView
-                    android:layout_width="100dp"
-                    android:layout_height="100dp"
-                    android:src="@drawable/ic_add_comment"
-                    android:contentDescription="Add comment icon" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="No comments found"
-                    android:textStyle="bold"
-                    android:textSize="16sp"
-                    android:layout_marginTop="8dp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Be the first to comment"
-                    android:textSize="14sp"
-                    android:layout_marginTop="4dp" />
-            </LinearLayout>
-        </FrameLayout>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Be the first comment"
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:layout_marginTop="8dp" />
+        </LinearLayout>
 
         <!-- Comment Input -->
         <LinearLayout

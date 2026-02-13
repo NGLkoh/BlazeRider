@@ -57,8 +57,9 @@ class MoreFragment : Fragment() {
         val notificationLayout = view.findViewById<LinearLayout>(R.id.notification)
         val notificationCountTextView = view.findViewById<TextView>(R.id.notification_count)
 
-        // Set visibility of edit_profile based on isAdmin
-        view.findViewById<View>(R.id.edit_profile).visibility = if (!isAdmin) View.VISIBLE else View.GONE
+        // Set visibility of edit_profile (now visible for both admin and regular users)
+        view.findViewById<View>(R.id.edit_profile).visibility = View.VISIBLE
+        
         historyLayout.visibility = if (isAdmin) View.GONE else View.VISIBLE
         changePasswordLayout.visibility = if (isAdmin) View.GONE else View.VISIBLE
         notificationLayout.visibility = if (isAdmin) View.GONE else View.VISIBLE
@@ -132,12 +133,10 @@ class MoreFragment : Fragment() {
                 .setImageResource(R.drawable.ic_blank)
         }
 
-        // Set click listener for edit profile (only relevant if visible)
+        // Set click listener for edit profile
         view.findViewById<View>(R.id.edit_profile).setOnClickListener {
-            if (!isAdmin) { // Optional: Guard to ensure click not works for admins
-                val intent = Intent(requireContext(), EditProfileActivity::class.java)
-                startActivity(intent)
-            }
+            val intent = Intent(requireContext(), EditProfileActivity::class.java)
+            startActivity(intent)
         }
 
         view.findViewById<LinearLayout>(R.id.notification).setOnClickListener {

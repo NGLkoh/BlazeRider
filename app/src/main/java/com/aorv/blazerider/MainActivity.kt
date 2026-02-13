@@ -122,7 +122,23 @@ class MainActivity : AppCompatActivity() {
                     arrayOf(Manifest.permission.POST_NOTIFICATIONS),
                     NOTIFICATION_PERMISSION_REQUEST_CODE
                 )
+            } else {
+                Log.d(TAG, "Notification permission already granted.")
+                getAndLogFCMToken()
             }
+        } else {
+            getAndLogFCMToken()
+        }
+    }
+
+    private fun getAndLogFCMToken() {
+        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+            if (!task.isSuccessful) {
+                Log.w(TAG, "Fetching FCM registration token failed", task.exception)
+                return@addOnCompleteListener
+            }
+            val token = task.result
+            Log.d(TAG, "FCM Token: $token")
         }
     }
 
@@ -155,21 +171,7 @@ class MainActivity : AppCompatActivity() {
 
                         if (verified) {
                             // Store FCM token
-                            FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-                                if (!task.isSuccessful) {
-                                    Log.w(TAG, "Fetching FCM registration token failed", task.exception)
-                                    return@addOnCompleteListener
-                                }
-                                val token = task.result
-                                db.collection("users").document(currentUser.uid)
-                                    .set(mapOf("fcmToken" to token), SetOptions.merge())
-                                    .addOnSuccessListener {
-                                        Log.d(TAG, "FCM token stored successfully")
-                                    }
-                                    .addOnFailureListener { e ->
-                                        Log.e(TAG, "Failed to store FCM token: ${e.message}")
-                                    }
-                            }
+                            getAndLogFCMToken()
 
                             // Start location updates and state management for verified users
                             startLocationUpdates(currentUser.uid)
@@ -266,6 +268,7 @@ class MainActivity : AppCompatActivity() {
             NOTIFICATION_PERMISSION_REQUEST_CODE -> {
                 if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     Log.d(TAG, "Notification permission granted")
+                    getAndLogFCMToken()
                 } else {
                     Log.w(TAG, "Notification permission denied")
                 }

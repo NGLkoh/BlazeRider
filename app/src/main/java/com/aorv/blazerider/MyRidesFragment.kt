@@ -302,6 +302,20 @@ class MyRidesFragment : Fragment() {
                     transaction.update(rideRef, "status", "cancelled")
                     transaction.update(firestore.collection("users").document(userId), "currentJoinedRide", null)
 
+                    // Log cancelled ride to history for the creator
+                    val cancelledRideHistory = RideHistory(
+                        datetime = Timestamp.now(),
+                        destination = ride.destination,
+                        distance = ride.distance,
+                        duration = ride.duration,
+                        origin = ride.origin,
+                        status = "Cancelled",
+                        userUid = userId,
+                        sharedRoutesId = rideId
+                    )
+                    val historyRef = firestore.collection("users").document(userId).collection("rideHistory").document()
+                    transaction.set(historyRef, cancelledRideHistory)
+
                     ride.joinedRiders?.keys?.forEach { riderId ->
                         transaction.update(firestore.collection("users").document(riderId), "currentJoinedRide", null)
                         val notifRef = firestore.collection("users").document(riderId).collection("notifications").document()

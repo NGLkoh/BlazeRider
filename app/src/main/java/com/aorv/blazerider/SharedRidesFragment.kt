@@ -9,6 +9,7 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -27,6 +28,7 @@ import java.util.*
 class SharedRidesFragment : Fragment() {
 
     private lateinit var recyclerView: RecyclerView
+    private lateinit var noSharedRidesText: TextView
     private lateinit var adapter: SharedRidesAdapter
     private val firestore = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
@@ -38,6 +40,7 @@ class SharedRidesFragment : Fragment() {
     ): View? {
         val view = inflater.inflate(R.layout.fragment_shared_rides, container, false)
         recyclerView = view.findViewById(R.id.shared_rides_recycler_view)
+        noSharedRidesText = view.findViewById(R.id.no_shared_rides_text)
         recyclerView.layoutManager = LinearLayoutManager(context)
         adapter = SharedRidesAdapter()
         recyclerView.adapter = adapter
@@ -63,6 +66,10 @@ class SharedRidesFragment : Fragment() {
                 } ?: emptyList()
 
                 val visibleRides = rides.filter { it.status != "completed" && it.status != "cancelled" }
+                
+                // Show/hide "No shared rides yet" text
+                noSharedRidesText.visibility = if (visibleRides.isEmpty()) View.VISIBLE else View.GONE
+                
                 adapter.submitList(visibleRides)
             }
     }

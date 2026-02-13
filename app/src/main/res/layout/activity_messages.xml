@@ -138,14 +138,29 @@
             </com.google.android.material.chip.ChipGroup>
         </LinearLayout>
 
-        <!-- Messages RecyclerView -->
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/messages_recycler_view"
+        <!-- Messages Container -->
+        <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1"
-            android:paddingHorizontal="16dp"
-            android:clipToPadding="false" />
+            android:layout_weight="1">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/messages_recycler_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:paddingHorizontal="16dp"
+                android:clipToPadding="false" />
+
+            <TextView
+                android:id="@+id/no_conversations_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:text="No conversation yet"
+                android:textSize="16sp"
+                android:textColor="@android:color/darker_gray"
+                android:visibility="gone" />
+        </FrameLayout>
 
     </LinearLayout>
 

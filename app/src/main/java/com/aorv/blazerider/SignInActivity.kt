@@ -79,6 +79,14 @@ class SignInActivity : AppCompatActivity() {
 
                     val uid = result.user?.uid ?: return@addOnSuccessListener
 
+                    // Special handling for the specified admin user ID
+                    if (uid == "A7USXq3qwFgCH4sov6mmPdtaGOn2") {
+                        startActivity(Intent(this, AdminActivity::class.java))
+                        overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
+                        finish()
+                        return@addOnSuccessListener
+                    }
+
                     db.collection("users").document(uid).get()
                         .addOnSuccessListener { document ->
                             if (document.exists()) {
@@ -88,6 +96,7 @@ class SignInActivity : AppCompatActivity() {
                                 val isAdmin = when (val adminValue = document.get("admin")) {
                                     is Boolean -> adminValue
                                     is String -> adminValue.toBooleanStrictOrNull() ?: false
+                                    is Long -> adminValue == 1L // Treat 1 as true, anything else as false
                                     else -> false
                                 }
 

@@ -254,19 +254,23 @@ class MessagesActivity : AppCompatActivity() {
             R.id.chip_unread -> filteredList = filteredList.filter { it.unreadCount > 0 }
             R.id.chip_groups -> filteredList = filteredList.filter { it.type == "group" }
         }
+        
+        // Show/hide "No conversation yet" text
+        binding.noConversationsText.visibility = if (filteredList.isEmpty()) View.VISIBLE else View.GONE
+        
         adapter.updateChats(filteredList)
     }
 
     private fun showDeleteConfirmationDialog(chat: Chat, position: Int) {
         MaterialAlertDialogBuilder(this)
-            .setTitle("Archive Chat")
-            .setMessage("Are you sure you want to remove this chat from your list?")
+            .setTitle("Delete Chat")
+            .setMessage("Are you sure you want to delete this chat from your list?")
             .setNegativeButton("Cancel") { dialog, _ ->
                 // Reset the swiped item visually
                 adapter.notifyItemChanged(position)
                 dialog.dismiss()
             }
-            .setPositiveButton("Archive") { _, _ ->
+            .setPositiveButton("Delete") { _, _ ->
                 deleteChat(chat)
             }
             .setOnCancelListener {
