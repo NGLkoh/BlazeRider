@@ -5,89 +5,121 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="16dp"
     android:background="@android:color/white">
 
-    <!-- Events Title -->
-    <TextView
-        android:text="Events"
-        android:textSize="24sp"
-        android:textStyle="bold"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:paddingBottom="8dp" />
-
-    <!-- Calendar Widget -->
-    <CalendarView
-        android:id="@+id/calendar_view"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_margin="16dp"
-        android:background="@android:color/white"
-        android:dateTextAppearance="@android:style/TextAppearance.Material.Body1"
-        android:weekDayTextAppearance="@android:style/TextAppearance.Material.Caption" />
-
-
-    <!-- Main Body -->
     <LinearLayout
-        android:id="@+id/main_content"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_height="wrap_content"
+        android:background="@drawable/gradient_orange"
         android:orientation="vertical"
-        android:padding="12dp">
+        android:padding="24dp">
 
-        <!-- What's on your mind bar -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Events"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Manage schedules and announcements"
+            android:textSize="14sp"
+            android:textColor="@android:color/white"
+            android:alpha="0.9" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:padding="0dp">
+            android:orientation="vertical"
+            android:padding="16dp">
 
-            <com.google.android.material.imageview.ShapeableImageView
-                android:id="@+id/user_image"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_marginEnd="8dp"
-                android:contentDescription="User Image"
-                android:scaleType="fitCenter"
-                android:src="@drawable/ic_anonymous"
-                app:shapeAppearanceOverlay="@style/RoundedImage" />
-
-            <TextView
-                android:id="@+id/btn_whats_on_mind"
-                android:layout_width="0dp"
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:background="@drawable/rounded_border_background"
-                android:paddingVertical="10dp"
-                android:paddingHorizontal="20dp"
-                android:text="What’s on your mind?"
-                android:textColor="@android:color/black"
-                android:textSize="16sp" />
+                android:layout_marginBottom="16dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="4dp">
 
-            <ImageButton
-                android:id="@+id/btn_add_image"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:layout_marginStart="8dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Add image"
-                android:padding="4dp"
-                android:scaleType="fitCenter"
-                app:srcCompat="@drawable/ic_add_image"
-                app:tint="@color/teal_200" />
+                <CalendarView
+                    android:id="@+id/calendar_view"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@android:color/white" />
+            </androidx.cardview.widget.CardView>
+
+            <LinearLayout
+                android:id="@+id/main_content"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingBottom="16dp">
+
+                    <com.google.android.material.imageview.ShapeableImageView
+                        android:id="@+id/user_image"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginEnd="8dp"
+                        android:contentDescription="User Image"
+                        android:scaleType="centerCrop"
+                        android:src="@drawable/ic_anonymous"
+                        app:shapeAppearanceOverlay="@style/RoundedImage" />
+
+                    <TextView
+                        android:id="@+id/btn_whats_on_mind"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:background="@drawable/rounded_border_background"
+                        android:paddingVertical="10dp"
+                        android:paddingHorizontal="20dp"
+                        android:text="What’s on your mind?"
+                        android:textColor="@android:color/black"
+                        android:textSize="16sp" />
+
+                    <ImageButton
+                        android:id="@+id/btn_add_image"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:layout_marginStart="8dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="Add image"
+                        android:padding="4dp"
+                        android:scaleType="fitCenter"
+                        app:srcCompat="@drawable/ic_add_image"
+                        app:tint="@color/red_orange" />
+                </LinearLayout>
+
+                <TextView
+                    android:text="Announcements"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="@android:color/black"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingBottom="8dp" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/feed_recycler_view"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false"
+                    app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+            </LinearLayout>
         </LinearLayout>
-
-        <!-- Feed Posts -->
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/feed_recycler_view"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:layout_marginTop="12dp"
-            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
-    </LinearLayout>
-
+    </ScrollView>
 </LinearLayout>

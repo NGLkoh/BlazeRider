@@ -189,9 +189,22 @@ class PostActivity : AppCompatActivity() {
 
         postButton.setOnClickListener {
             val content = postContent.text.toString().trim()
+
             if (content.isNotEmpty()) {
-                showProgressDialog()
-                savePostToFirebase(content)
+                // Show Confirmation Dialog
+                AlertDialog.Builder(this)
+                    .setTitle("Confirm Post")
+                    .setMessage("Are you sure you want to post it now?")
+                    .setPositiveButton("Yes") { _, _ ->
+                        // Proceed with posting if user clicks Yes
+                        showProgressDialog()
+                        savePostToFirebase(content)
+                    }
+                    .setNegativeButton("No") { dialog, _ ->
+                        // Just close the dialog if user clicks No
+                        dialog.dismiss()
+                    }
+                    .show()
             } else {
                 Toast.makeText(this, "Post content cannot be empty", Toast.LENGTH_SHORT).show()
             }

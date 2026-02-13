@@ -16,6 +16,7 @@ import com.github.mikephil.charting.data.Entry
 import com.github.mikephil.charting.data.LineData
 import com.github.mikephil.charting.data.LineDataSet
 import com.github.mikephil.charting.formatter.ValueFormatter
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import java.text.SimpleDateFormat
@@ -25,7 +26,11 @@ class DashboardFragment : Fragment() {
     private lateinit var lineChart: LineChart
     private lateinit var segmentedControl: RadioGroup
     private lateinit var tvTotalUsers: TextView
+    private lateinit var tvWelcomeAdmin: TextView
+    private lateinit var tvCurrentDate: TextView
+
     private val db = FirebaseFirestore.getInstance()
+    private val auth = FirebaseAuth.getInstance()
     private var allVerifiedUsers: List<DocumentSnapshot> = emptyList()
 
     override fun onCreateView(
@@ -39,12 +44,21 @@ class DashboardFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        // Initialize Views
         lineChart = view.findViewById(R.id.lineChart)
         segmentedControl = view.findViewById(R.id.segmentedControl)
         tvTotalUsers = view.findViewById(R.id.tv_total_users)
+        tvWelcomeAdmin = view.findViewById(R.id.tv_welcome_admin)
+        tvCurrentDate = view.findViewById(R.id.tv_current_date)
 
+        // Set Personalization and Date
+        setCurrentDate()
+        fetchAdminName()
+
+        // Fetch User Data for Chart
         fetchAllVerifiedUsers()
 
+        // Handle Segmented Control (Day, Week, Month, Year)
         segmentedControl.setOnCheckedChangeListener { _, checkedId ->
             val selectedButton = view.findViewById<RadioButton>(checkedId) ?: return@setOnCheckedChangeListener
             updateSegmentedControl(selectedButton)
@@ -56,8 +70,27 @@ class DashboardFragment : Fragment() {
             }
         }
 
+        // Default selection
         if (savedInstanceState == null) {
             view.findViewById<RadioButton>(R.id.btn_week).isChecked = true
+        }
+    }
+
+    private fun setCurrentDate() {
+        val sdf = SimpleDateFormat("MMMM dd, yyyy", Locale.getDefault())
+        tvCurrentDate.text = sdf.format(Date())
+    }
+
+    private fun fetchAdminName() {
+        val currentUser = auth.currentUser
+        if (currentUser != null) {
+            db.collection("users").document(currentUser.uid).get()
+                .addOnSuccessListener { document ->
+                    if (isAdded && document.exists()) {
+                        val firstName = document.getString("firstName") ?: "Admin"
+                        tvWelcomeAdmin.text = "Welcome Admin $firstName"
+                    }
+                }
         }
     }
 
@@ -76,12 +109,11 @@ class DashboardFragment : Fragment() {
                 if (!isAdded || snapshot == null) return@addOnSuccessListener
                 allVerifiedUsers = snapshot.documents.filter { doc -> !(doc.getBoolean("admin") ?: false) }
                 tvTotalUsers.text = allVerifiedUsers.size.toString()
-                updateGraphFor("week") // Default view
+                updateGraphFor("week")
             }.addOnFailureListener { e ->
                 if (!isAdded) return@addOnFailureListener
                 Log.e("DashboardFragment", "Error fetching all users: ", e)
                 tvTotalUsers.text = "0"
-                Toast.makeText(context, "Error fetching data: ${e.message}", Toast.LENGTH_LONG).show()
             }
     }
 
@@ -125,7 +157,6 @@ class DashboardFragment : Fragment() {
             val cal = Calendar.getInstance(timeZone).apply { time = accountCreated }
 
             val key = if (type == "week") {
-                // *** RELIABLE WEEK GROUPING ***
                 cal.firstDayOfWeek = Calendar.MONDAY
                 val offset = (cal.get(Calendar.DAY_OF_WEEK) - Calendar.MONDAY + 7) % 7
                 cal.add(Calendar.DATE, -offset)
@@ -152,12 +183,12 @@ class DashboardFragment : Fragment() {
             "year" -> Pair(5, Calendar.YEAR)
             else -> return
         }
-        
+
         val originalCal = cal.clone() as Calendar
         originalCal.add(calendarField, -(iterations - 1))
 
         for (i in 0 until iterations) {
-             if (type == "week") {
+            if (type == "week") {
                 originalCal.firstDayOfWeek = Calendar.MONDAY
                 originalCal.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
             }
@@ -175,10 +206,27 @@ class DashboardFragment : Fragment() {
         }
 
         val dataSet = LineDataSet(entries, "Registered & Verified Users")
-        dataSet.color = ContextCompat.getColor(requireContext(), R.color.black)
-        dataSet.valueTextSize = 10f
+        // 1. Smooth the line (Cubic Bezier)
+        dataSet.mode = LineDataSet.Mode.CUBIC_BEZIER
+        dataSet.cubicIntensity = 0.2f
+
+// 2. Line Styling
+        dataSet.color = ContextCompat.getColor(requireContext(), R.color.red_orange)
+        dataSet.lineWidth = 3f
         dataSet.setDrawCircles(true)
-        dataSet.setCircleColor(ContextCompat.getColor(requireContext(), R.color.black))
+        dataSet.setCircleColor(ContextCompat.getColor(requireContext(), R.color.red_orange))
+        dataSet.circleRadius = 4f
+        dataSet.setDrawCircleHole(true)
+        dataSet.circleHoleRadius = 2f
+
+// 3. Add Area Gradient Fill
+        dataSet.setDrawFilled(true)
+        val fillGradient = ContextCompat.getDrawable(requireContext(), R.drawable.chart_gradient)
+        dataSet.fillDrawable = fillGradient
+
+// 4. Clean up the values
+        dataSet.valueTextSize = 10f
+        dataSet.valueTextColor = ContextCompat.getColor(requireContext(), R.color.black)
         dataSet.valueFormatter = object : ValueFormatter() {
             override fun getFormattedValue(value: Float) = value.toInt().toString()
         }
@@ -193,12 +241,12 @@ class DashboardFragment : Fragment() {
                     return if (index in labels.indices) labels[index] else ""
                 }
             }
-            setDrawGridLines(false)
             position = com.github.mikephil.charting.components.XAxis.XAxisPosition.BOTTOM
+            setDrawGridLines(false)
         }
         lineChart.axisLeft.apply {
-            granularity = 1f
             axisMinimum = 0f
+            granularity = 1f
             setDrawGridLines(false)
         }
         lineChart.axisRight.isEnabled = false
