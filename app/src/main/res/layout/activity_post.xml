@@ -100,10 +100,26 @@
                     android:layout_height="wrap_content"
                     android:entries="@array/privacy_options"
                     android:visibility="gone" />
+
             </LinearLayout>
         </LinearLayout>
 
+        <TextView
+            android:id="@+id/schedule_info_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            android:background="#E3F2FD"
+            android:textColor="#1565C0"
+            android:padding="8dp"
+            android:layout_marginBottom="8dp"
+            android:textStyle="bold"
+            android:gravity="center_vertical"
+            android:drawablePadding="8dp"
+            app:drawableStartCompat="@android:drawable/ic_menu_my_calendar"
+            android:text="Scheduled for: ..." />
         <!-- Post Content -->
+
         <EditText
             android:id="@+id/post_content"
             android:layout_width="match_parent"

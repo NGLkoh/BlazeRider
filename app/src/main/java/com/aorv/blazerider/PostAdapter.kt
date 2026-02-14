@@ -1,7 +1,6 @@
 package com.aorv.blazerider
 
 import android.app.AlertDialog
-import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -29,7 +28,8 @@ import java.util.*
 
 class PostAdapter(
     private val onDeletePost: (Post) -> Unit,
-    private val onCommentClick: (Post) -> Unit
+    private val onCommentClick: (Post) -> Unit,
+    private val isAnnouncement: Boolean = false // <--- NEW PARAMETER
 ) : RecyclerView.Adapter<PostAdapter.PostViewHolder>() {
 
     private var posts = listOf<Post>()
@@ -72,6 +72,11 @@ class PostAdapter(
         private val adminBadge = itemView.findViewById<TextView>(R.id.post_admin_badge)
         private val postOptionsIcon = itemView.findViewById<ImageView>(R.id.post_options_icon)
 
+        // Badge Views
+        private val scheduledBadgeContainer = itemView.findViewById<LinearLayout>(R.id.scheduled_badge_container)
+        private val scheduledTimeText = itemView.findViewById<TextView>(R.id.scheduled_time_text)
+        private val scheduledIcon = itemView.findViewById<ImageView>(R.id.scheduled_icon) // Ensure this ID exists or use childAt(0)
+
         private var pageChangeCallback: ViewPager2.OnPageChangeCallback? = null
         private val db = FirebaseFirestore.getInstance()
         private val auth = FirebaseAuth.getInstance()
@@ -90,6 +95,7 @@ class PostAdapter(
         fun bind(post: Post) {
             cleanup()
 
+            // Option Menu Logic
             if (post.userId == auth.currentUser?.uid) {
                 postOptionsIcon.visibility = View.VISIBLE
                 postOptionsIcon.setOnClickListener { showPostOptionsMenu(it, post) }
@@ -97,8 +103,7 @@ class PostAdapter(
                 postOptionsIcon.visibility = View.GONE
             }
 
-
-            // Load user data
+            // Load User Data
             db.collection("users").document(post.userId).get()
                 .addOnSuccessListener { document ->
                     if (adapterPosition == RecyclerView.NO_POSITION) return@addOnSuccessListener
@@ -114,25 +119,64 @@ class PostAdapter(
                             .into(profilePic)
                     }
                 }
-                .addOnFailureListener { e ->
-                    if (adapterPosition == RecyclerView.NO_POSITION) return@addOnFailureListener
-                    Log.e("PostViewHolder", "Error loading user data: ${e.message}")
-                    Glide.with(itemView.context)
-                        .load(R.drawable.ic_anonymous)
-                        .into(profilePic)
+                .addOnFailureListener {
+                    Glide.with(itemView.context).load(R.drawable.ic_anonymous).into(profilePic)
                 }
 
-            // Set post data
             content.text = post.content
-            timestamp.text = post.createdAt?.let {
-                SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(it)
-            } ?: ""
 
-            // Display admin badge
+            // ==========================================================
+            //                 UPDATED TIME & BADGE LOGIC
+            // ==========================================================
+            val date = post.createdAt
+            if (date != null) {
+                val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
+                val timeFormat = SimpleDateFormat("hh:mm a", Locale.getDefault())
+
+                val dateString = dateFormat.format(date)
+                val timeString = timeFormat.format(date)
+
+                // 1. If it's the Announcements Screen
+                if (isAnnouncement) {
+                    scheduledBadgeContainer?.visibility = View.GONE
+                    // Just show date (or date + time if you prefer)
+                    timestamp.text = dateString
+                }
+                // 2. If it's the Events Screen AND it's an Admin Post
+                else if (post.admin && scheduledBadgeContainer != null && scheduledTimeText != null) {
+                    scheduledBadgeContainer.visibility = View.VISIBLE
+                    timestamp.text = dateString // Main timestamp is just date
+
+                    if (post.isScheduled) {
+                        // CASE: Scheduled -> Show "Scheduled • 03:41 PM"
+                        scheduledTimeText.text = "Scheduled • $timeString"
+                    } else {
+                        // CASE: Posted Now -> Show just "03:41 PM" (No "Event" word)
+                        scheduledTimeText.text = timeString
+                    }
+                }
+                // 3. Regular User Post
+                else {
+                    scheduledBadgeContainer?.visibility = View.GONE
+                    timestamp.text = "$dateString • $timeString"
+                }
+            } else {
+                timestamp.text = ""
+                scheduledBadgeContainer?.visibility = View.GONE
+            }
+            // ==========================================================
+
             adminBadge?.visibility = if (post.admin) View.VISIBLE else View.GONE
             adminBadge?.text = "Admin"
 
-            // Setup images
+            // ... (Rest of Image Logic, Reactions, Click Listeners remains exactly the same)
+            setupImages(post)
+            setupReactions(post)
+            setupClicks(post)
+        }
+
+        // Helper methods to keep bind() clean (logic copied from your previous code)
+        private fun setupImages(post: Post) {
             if (post.imageUris.isNotEmpty()) {
                 imageContainer.visibility = View.VISIBLE
                 imageViewPager.adapter = ImagePagerAdapter(post.imageUris)
@@ -154,15 +198,13 @@ class PostAdapter(
                 imageContainer.visibility = View.GONE
                 imageCounter.visibility = View.GONE
             }
+        }
 
-            // Set counts
+        private fun setupReactions(post: Post) {
             val totalReactions = post.reactionCount.values.sum()
             reactionsCount.text = when { totalReactions > 0 -> "$totalReactions reactions" else -> "" }
-            reactionsCount.setOnClickListener {
-                if (totalReactions > 0) {
-                    showReactionsDialog(post.id)
-                }
-            }
+            reactionsCount.setOnClickListener { if (totalReactions > 0) showReactionsDialog(post.id) }
+
             val numComments = post.commentsCount
             if (numComments > 0) {
                 commentsCount.visibility = View.VISIBLE
@@ -171,29 +213,26 @@ class PostAdapter(
                 commentsCount.visibility = View.GONE
             }
 
-            // Load current reaction
             val user = auth.currentUser
             if (user != null) {
                 db.collection("posts").document(post.id)
                     .collection("reactions").document(user.uid).get()
                     .addOnSuccessListener { document ->
-                        if (adapterPosition == RecyclerView.NO_POSITION) return@addOnSuccessListener
-                        val reactionType = document.getString("reactionType")
-                        this.currentReaction = reactionType
-                        updateLikeIcon(reactionType)
+                        if (adapterPosition != RecyclerView.NO_POSITION) {
+                            val reactionType = document.getString("reactionType")
+                            this.currentReaction = reactionType
+                            updateLikeIcon(reactionType)
+                        }
                     }
             } else {
                 this.currentReaction = null
                 updateLikeIcon(null)
             }
+        }
 
-            // Like action
-            likeIcon.setOnClickListener {
-                handleLikeClick(post.id)
-            }
-
+        private fun setupClicks(post: Post) {
+            likeIcon.setOnClickListener { handleLikeClick(post.id) }
             longClickRunnable = Runnable { showReactionPicker(post.id) }
-
             likeIcon.setOnTouchListener { _, event ->
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> longClickHandler.postDelayed(longClickRunnable!!, 200)
@@ -201,15 +240,10 @@ class PostAdapter(
                 }
                 false
             }
-
-            // Comment action
-            commentContainer.setOnClickListener {
-                onCommentClick(post)
-            }
-
-            shareContainer.setOnClickListener { /* Implement share */ }
+            commentContainer.setOnClickListener { onCommentClick(post) }
         }
 
+        // ... (Keep your showReactionsDialog, showPostOptionsMenu, updateLikeIcon, updateReaction etc. methods here)
         private fun showReactionsDialog(postId: String) {
             val dialogView = LayoutInflater.from(itemView.context).inflate(R.layout.dialog_reactions, null)
             val reactionsRecyclerView = dialogView.findViewById<RecyclerView>(R.id.reactions_recycler_view)

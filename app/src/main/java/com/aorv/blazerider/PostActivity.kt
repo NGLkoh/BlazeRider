@@ -59,6 +59,9 @@ class PostActivity : AppCompatActivity() {
     private lateinit var progressText: TextView
     private var isAdmin: Boolean = false // Default to false
 
+    // Variable to hold the scheduled time
+    private var scheduledTimestamp: Long = 0L
+
     // Photo picker for Android 13+
     private val pickImagesModern = registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(5)) { uris ->
         if (uris.isNotEmpty()) {
@@ -95,6 +98,9 @@ class PostActivity : AppCompatActivity() {
         // Get admin status from intent
         isAdmin = intent.getBooleanExtra("admin", false)
 
+        // Get the scheduled date passed from EventsFragment
+        scheduledTimestamp = intent.getLongExtra("SCHEDULED_DATE", 0L)
+
         // Light status bar icons
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.insetsController?.setSystemBarsAppearance(
@@ -119,6 +125,9 @@ class PostActivity : AppCompatActivity() {
         imageCounter = findViewById(R.id.image_counter)
         removeImageButton = findViewById(R.id.remove_image_button)
         postButton = findViewById(R.id.post_button)
+
+        // Find the schedule info text view (make sure you added this ID to your XML)
+        val scheduleInfoText = findViewById<TextView>(R.id.schedule_info_text)
 
         setSupportActionBar(toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
@@ -176,6 +185,25 @@ class PostActivity : AppCompatActivity() {
         postButton.isEnabled = false
         postButton.alpha = 0.5f
 
+        // --- NEW LOGIC: Update UI if Scheduled ---
+        if (scheduledTimestamp > 0) {
+            val date = java.util.Date(scheduledTimestamp)
+            val format = java.text.SimpleDateFormat("MMMM dd, yyyy 'at' hh:mm a", java.util.Locale.getDefault())
+            val formattedDate = format.format(date)
+
+            if (scheduleInfoText != null) {
+                scheduleInfoText.text = "Scheduled for: $formattedDate"
+                scheduleInfoText.visibility = View.VISIBLE
+            }
+            postButton.text = "Schedule"
+        } else {
+            if (scheduleInfoText != null) {
+                scheduleInfoText.visibility = View.GONE
+            }
+            postButton.text = "Post"
+        }
+        // -----------------------------------------
+
         val postContent = findViewById<EditText>(R.id.post_content)
         postContent.addTextChangedListener(object : TextWatcher {
             override fun afterTextChanged(s: Editable?) {
@@ -192,9 +220,10 @@ class PostActivity : AppCompatActivity() {
 
             if (content.isNotEmpty()) {
                 // Show Confirmation Dialog
+                val actionWord = if (scheduledTimestamp > 0) "schedule" else "post"
                 AlertDialog.Builder(this)
                     .setTitle("Confirm Post")
-                    .setMessage("Are you sure you want to post it now?")
+                    .setMessage("Are you sure you want to $actionWord it now?")
                     .setPositiveButton("Yes") { _, _ ->
                         // Proceed with posting if user clicks Yes
                         showProgressDialog()
@@ -255,10 +284,10 @@ class PostActivity : AppCompatActivity() {
         val inflater = layoutInflater
         val dialogView = inflater.inflate(android.R.layout.simple_list_item_1, null)
         progressText = dialogView.findViewById(android.R.id.text1)
-        progressText.text = "Posting, please wait... 0%"
+        progressText.text = "Processing, please wait... 0%"
 
         builder.setView(dialogView)
-            .setTitle("Posting")
+            .setTitle(if (scheduledTimestamp > 0) "Scheduling" else "Posting")
             .setCancelable(false)
 
         progressDialog = builder.create()
@@ -267,7 +296,7 @@ class PostActivity : AppCompatActivity() {
 
     private fun updateProgress(progress: Int) {
         runOnUiThread {
-            progressText.text = "Posting, please wait... $progress%"
+            progressText.text = "Processing, please wait... $progress%"
         }
     }
 
@@ -374,32 +403,39 @@ class PostActivity : AppCompatActivity() {
         val postRef = db.collection("posts").document()
         val postId = postRef.id
 
-        // Upload images and save post
         GlobalScope.launch(Dispatchers.IO) {
             val imageUrls = uploadImages(postId)
+
+            // Check if it's scheduled (timestamp > 0)
+            val isScheduled = scheduledTimestamp > 0
+
+            val creationDate: Any = if (isScheduled) {
+                java.util.Date(scheduledTimestamp)
+            } else {
+                FieldValue.serverTimestamp()
+            }
 
             val post = hashMapOf(
                 "userId" to user.uid,
                 "content" to content,
-                "createdAt" to FieldValue.serverTimestamp(),
+                "createdAt" to creationDate,
                 "imageUris" to imageUrls,
                 "reactionCount" to mapOf(
-                    "angry" to 0,
-                    "haha" to 0,
-                    "like" to 0,
-                    "love" to 0,
-                    "sad" to 0,
-                    "wow" to 0
+                    "angry" to 0, "haha" to 0, "like" to 0,
+                    "love" to 0, "sad" to 0, "wow" to 0
                 ),
-                "admin" to isAdmin
+                "admin" to isAdmin,
+                "isScheduled" to isScheduled, // <--- SAVE THIS FLAG
+                "commentsCount" to 0
             )
 
             try {
                 postRef.set(post).await()
-                updateProgress(100) // Set to 100% when Firestore write completes
+                updateProgress(100)
                 runOnUiThread {
                     dismissProgressDialog()
-                    Toast.makeText(this@PostActivity, "Post submitted successfully", Toast.LENGTH_SHORT).show()
+                    val successMsg = if (scheduledTimestamp > 0) "Event scheduled successfully" else "Post submitted successfully"
+                    Toast.makeText(this@PostActivity, successMsg, Toast.LENGTH_SHORT).show()
                     setResult(Activity.RESULT_OK)
                     finish()
                 }

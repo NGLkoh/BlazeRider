@@ -20,6 +20,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
+import java.util.Date
 
 class AnnouncementsFragment : Fragment() {
 
@@ -40,21 +41,18 @@ class AnnouncementsFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        // Inflate layout
         return inflater.inflate(R.layout.fragment_announcements, container, false)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // ✅ Apply window insets safely (attach to root view)
         ViewCompat.setOnApplyWindowInsetsListener(view) { v, insets ->
             val navBarHeight = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
             v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, navBarHeight)
             insets
         }
 
-        // Setup RecyclerView
         recyclerView = view.findViewById(R.id.feed_recycler_view)
         recyclerView.layoutManager = LinearLayoutManager(context)
         postAdapter = PostAdapter(
@@ -64,17 +62,16 @@ class AnnouncementsFragment : Fragment() {
                     putExtra("POST_ID", post.id)
                 }
                 commentsActivityLauncher.launch(intent)
-            }
+            },
+            isAnnouncement = true
         )
         recyclerView.adapter = postAdapter
 
-        // Load current user’s profile picture (if you have one)
         val userImage = view.findViewById<ShapeableImageView?>(R.id.user_image)
         if (userImage != null) {
             loadUserProfile(userImage)
         }
 
-        // Load admin-only posts
         loadAnnouncements()
     }
 
@@ -119,8 +116,11 @@ class AnnouncementsFragment : Fragment() {
 
     private fun loadAnnouncements() {
         postsListener?.remove()
+
+        // CHANGE: Removed .whereLessThanOrEqualTo("createdAt", ...)
+        // We now fetch ALL admin posts and filter them inside the listener below.
         postsListener = db.collection("posts")
-            .whereEqualTo("admin", true) // ✅ Filter: only admin posts
+            .whereEqualTo("admin", true)
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, e ->
                 if (e != null) {
@@ -129,20 +129,33 @@ class AnnouncementsFragment : Fragment() {
                 }
 
                 if (snapshot != null) {
+                    val now = Date() // Get the current time EVERY time the data updates
+
                     val posts = snapshot.documents.mapNotNull { doc ->
-                        val imageUris = doc.get("imageUris") as? List<String> ?: emptyList()
-                        Log.d("AnnouncementsFragment", "Admin Post ID: ${doc.id}, Image URIs: $imageUris")
-                        Post(
-                            id = doc.id,
-                            userId = doc.getString("userId") ?: "",
-                            content = doc.getString("content") ?: "",
-                            createdAt = doc.getTimestamp("createdAt")?.toDate(),
-                            imageUris = imageUris,
-                            reactionCount = doc.get("reactionCount") as? Map<String, Long> ?: emptyMap(),
-                            commentsCount = doc.getLong("commentsCount") ?: 0,
-                            admin = doc.getBoolean("admin") ?: false
-                        )
+                        try {
+                            val imageUris = doc.get("imageUris") as? List<String> ?: emptyList()
+                            Post(
+                                id = doc.id,
+                                userId = doc.getString("userId") ?: "",
+                                content = doc.getString("content") ?: "",
+                                createdAt = doc.getTimestamp("createdAt")?.toDate(),
+                                imageUris = imageUris,
+                                reactionCount = doc.get("reactionCount") as? Map<String, Long> ?: emptyMap(),
+                                commentsCount = doc.getLong("commentsCount") ?: 0,
+                                admin = doc.getBoolean("admin") ?: false,
+                                isScheduled = doc.getBoolean("isScheduled") ?: false
+                            )
+                        } catch (e: Exception) {
+                            Log.e("AnnouncementsFragment", "Error parsing post", e)
+                            null
+                        }
+                    }.filter { post ->
+                        // FILTER LOGIC:
+                        // 1. If it is NOT scheduled (Post Now) -> Show it.
+                        // 2. If it IS scheduled -> Only show it if the time (createdAt) has passed.
+                        !post.isScheduled || (post.createdAt != null && post.createdAt.before(now))
                     }
+
                     postAdapter.submitPosts(posts)
                 }
             }

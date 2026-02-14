@@ -7,8 +7,9 @@ data class Post(
     val userId: String,
     val content: String,
     val createdAt: Date?,
-    val imageUris: List<String>,
-    val reactionCount: Map<String, Long>,
+    val imageUris: List<String> = emptyList(),
+    val reactionCount: Map<String, Long> = emptyMap(),
     val commentsCount: Long = 0,
-    val admin: Boolean = false
+    val admin: Boolean = false,
+    val isScheduled: Boolean = false // This field is required for your new logic
 )
