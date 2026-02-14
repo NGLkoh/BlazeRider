@@ -343,7 +343,15 @@ class HomeActivity : AppCompatActivity() {
                 .whereEqualTo("admin", true).whereGreaterThan("createdAt", lastRead)
                 .addSnapshotListener { snapshot, e ->
                     if (e != null) return@addSnapshotListener
-                    val unreadCount = snapshot?.size() ?: 0
+                    
+                    val now = Date()
+                    val unreadCount = snapshot?.documents?.count { doc ->
+                        val isScheduled = doc.getBoolean("isScheduled") ?: false
+                        val createdAt = doc.getTimestamp("createdAt")?.toDate()
+                        // Count if it's NOT scheduled, OR if it IS scheduled and the time has passed.
+                        !isScheduled || (createdAt != null && createdAt.before(now))
+                    } ?: 0
+
                     if (unreadCount > 0) {
                         val badge = bottomNav.getOrCreateBadge(R.id.nav_announcements)
                         badge.isVisible = true; badge.number = unreadCount

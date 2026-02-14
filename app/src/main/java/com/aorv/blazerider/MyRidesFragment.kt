@@ -35,6 +35,9 @@ class MyRidesFragment : Fragment() {
     private val TAG = "MyRidesFragment"
     private val locationViewModel: LocationViewModel by activityViewModels()
 
+    private var sharedRoutesList: List<SharedRide> = emptyList()
+    private var scheduledRidesList: List<SharedRide> = emptyList()
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -50,6 +53,7 @@ class MyRidesFragment : Fragment() {
         recyclerView.adapter = adapter
 
         fetchMyRides()
+        fetchScheduledRides()
         return view
     }
 
@@ -74,22 +78,78 @@ class MyRidesFragment : Fragment() {
                 } ?: emptyList()
 
                 // Filter for active rides where user is creator or joiner
-                val myRides = allRides.filter { ride ->
+                sharedRoutesList = allRides.filter { ride ->
                     (ride.userUid == userId || ride.joinedRiders?.containsKey(userId) == true) &&
                             ride.status != "completed" && ride.status != "cancelled"
                 }
 
-                // Toggle Empty State Visibility
-                if (myRides.isEmpty()) {
-                    recyclerView.visibility = View.GONE
-                    noRidesText.visibility = View.VISIBLE
-                } else {
-                    recyclerView.visibility = View.VISIBLE
-                    noRidesText.visibility = View.GONE
+                updateList()
+            }
+    }
+
+    private fun fetchScheduledRides() {
+        val userId = auth.currentUser?.uid ?: return
+
+        firestore.collection("rides")
+            .whereEqualTo("hostId", userId)
+            .whereEqualTo("isScheduled", true)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e(TAG, "Error fetching scheduled rides: ${error.message}")
+                    return@addSnapshotListener
                 }
 
-                adapter.submitList(myRides)
+                scheduledRidesList = snapshot?.documents?.mapNotNull { doc ->
+                    try {
+                        val rideTimestampRaw = doc.get("rideTimestamp")
+                        val rideTimestamp = when (rideTimestampRaw) {
+                            is Long -> Timestamp(Date(rideTimestampRaw))
+                            is Timestamp -> rideTimestampRaw
+                            else -> Timestamp.now()
+                        }
+
+                        SharedRide(
+                            datetime = rideTimestamp,
+                            destination = doc.getString("endLocationName"),
+                            origin = doc.getString("startLocationName"),
+                            userUid = doc.getString("hostId"),
+                            sharedRoutesId = doc.id,
+                            isScheduled = true,
+                            status = "scheduled",
+                            distance = doc.getDouble("distance"),
+                            duration = doc.getDouble("duration"),
+                            destinationCoordinates = mapOf(
+                                "latitude" to (doc.getDouble("endLat") ?: 0.0),
+                                "longitude" to (doc.getDouble("endLng") ?: 0.0)
+                            ),
+                            originCoordinates = mapOf(
+                                "latitude" to (doc.getDouble("startLat") ?: 0.0),
+                                "longitude" to (doc.getDouble("startLng") ?: 0.0)
+                            )
+                        )
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error parsing scheduled ride ${doc.id}: ${e.message}")
+                        null
+                    }
+                } ?: emptyList()
+
+                updateList()
             }
+    }
+
+    private fun updateList() {
+        val combinedRides = (sharedRoutesList + scheduledRidesList).sortedByDescending { it.datetime }
+
+        // Toggle Empty State Visibility
+        if (combinedRides.isEmpty()) {
+            recyclerView.visibility = View.GONE
+            noRidesText.visibility = View.VISIBLE
+        } else {
+            recyclerView.visibility = View.VISIBLE
+            noRidesText.visibility = View.GONE
+        }
+
+        adapter.submitList(combinedRides)
     }
 
     inner class MyRidesAdapter : RecyclerView.Adapter<MyRidesAdapter.ViewHolder>() {
@@ -136,27 +196,41 @@ class MyRidesFragment : Fragment() {
                 binding.duration.text = "Duration: ${formatDuration(ride.duration)}"
 
                 val ridersCount = ride.joinedRiders?.size ?: 0
-                binding.rideNumbers.text = "$ridersCount ${if (ridersCount <= 1) "rider" else "riders"} joined"
+                binding.rideNumbers.text = if (ride.isScheduled && ride.status == "scheduled") {
+                    "Scheduled"
+                } else {
+                    "$ridersCount ${if (ridersCount <= 1) "rider" else "riders"} joined"
+                }
 
                 binding.joinRideBtn.visibility = View.GONE
                 binding.previewRideBtn.visibility = View.GONE
 
                 val isRideCreator = ride.userUid == userId
-                if (isRideCreator) {
-                    binding.startRouteBtn.visibility = View.VISIBLE
-                    binding.arrivedBtn.visibility = View.VISIBLE
+                
+                if (ride.isScheduled && ride.status == "scheduled") {
+                    binding.startRouteBtn.visibility = View.GONE
+                    binding.arrivedBtn.visibility = View.GONE
                     binding.leaveRideBtn.visibility = View.GONE
                     binding.cancelRideBtn.visibility = View.VISIBLE
+                    binding.liveText.visibility = View.GONE
+                    binding.liveIndicator.visibility = View.GONE
                 } else {
-                    binding.startRouteBtn.visibility = View.VISIBLE
-                    binding.arrivedBtn.visibility = View.VISIBLE
-                    binding.leaveRideBtn.visibility = View.VISIBLE
-                    binding.cancelRideBtn.visibility = View.GONE
+                    if (isRideCreator) {
+                        binding.startRouteBtn.visibility = View.VISIBLE
+                        binding.arrivedBtn.visibility = View.VISIBLE
+                        binding.leaveRideBtn.visibility = View.GONE
+                        binding.cancelRideBtn.visibility = View.VISIBLE
+                    } else {
+                        binding.startRouteBtn.visibility = View.VISIBLE
+                        binding.arrivedBtn.visibility = View.VISIBLE
+                        binding.leaveRideBtn.visibility = View.VISIBLE
+                        binding.cancelRideBtn.visibility = View.GONE
+                    }
                 }
 
                 // Auto-check for arrival
                 locationViewModel.lastKnownLocation.observe(viewLifecycleOwner) { currentLatLng ->
-                    if (currentLatLng != null) {
+                    if (currentLatLng != null && ride.status != "scheduled") {
                         val destLat = ride.destinationCoordinates?.get("latitude") ?: 0.0
                         val destLng = ride.destinationCoordinates?.get("longitude") ?: 0.0
 
@@ -296,6 +370,15 @@ class MyRidesFragment : Fragment() {
             private fun cancelRide(ride: SharedRide) {
                 val userId = auth.currentUser?.uid ?: return
                 val rideId = ride.sharedRoutesId ?: return
+
+                if (ride.status == "scheduled") {
+                    firestore.collection("rides").document(rideId)
+                        .update("isScheduled", false)
+                        .addOnSuccessListener {
+                            if (isAdded) Toast.makeText(requireContext(), "Scheduled ride cancelled", Toast.LENGTH_SHORT).show()
+                        }
+                    return
+                }
 
                 firestore.runTransaction { transaction ->
                     val rideRef = firestore.collection("sharedRoutes").document(rideId)

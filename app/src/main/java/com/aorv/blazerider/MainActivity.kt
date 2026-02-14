@@ -11,7 +11,6 @@ import android.os.Bundle
 import android.os.Looper
 import android.util.Log
 import android.view.View
-import android.widget.ProgressBar
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
@@ -29,8 +28,6 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.GeoPoint
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.messaging.FirebaseMessaging
-import com.firebase.geofire.GeoFireUtils
-import com.firebase.geofire.GeoLocation
 import kotlinx.coroutines.*
 import java.util.Timer
 import kotlin.concurrent.timerTask
@@ -39,7 +36,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var auth: FirebaseAuth
     private lateinit var db: FirebaseFirestore
     private lateinit var fusedLocationClient: FusedLocationProviderClient
-    private lateinit var progressBar: ProgressBar
     private var locationCallback: LocationCallback? = null
     private var lastKnownLocation: Location? = null // Track last significant location
     private var lastUpdate: Long = 0 // For debouncing Firestore updates
@@ -52,10 +48,6 @@ class MainActivity : AppCompatActivity() {
     private val LOCATION_UPDATE_INTERVAL = 5000L // 5 seconds
     private val INACTIVITY_THRESHOLD = 5 * 60 * 1000L // 5 minutes
 
-    companion object {
-        private var hasCheckedUserStatus = false
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -65,16 +57,6 @@ class MainActivity : AppCompatActivity() {
         auth = FirebaseAuth.getInstance()
         db = FirebaseFirestore.getInstance()
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-
-        // Setup ProgressBar
-        progressBar = findViewById<ProgressBar>(R.id.loadingProgressBar).apply {
-            visibility = View.VISIBLE
-            isIndeterminate = true
-            indeterminateDrawable.setColorFilter(
-                resources.getColor(android.R.color.holo_red_dark),
-                android.graphics.PorterDuff.Mode.SRC_IN
-            )
-        }
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -95,19 +77,60 @@ class MainActivity : AppCompatActivity() {
         }
         ProcessLifecycleOwner.get().lifecycle.addObserver(lifecycleObserver)
 
-        // Check user status
-        if (savedInstanceState == null && !hasCheckedUserStatus) {
-            Log.d(TAG, "Fresh app launch, scheduling checkUserStatus")
-            hasCheckedUserStatus = true
-            Timer().schedule(timerTask {
-                runOnUiThread {
-                    checkUserStatus()
+        // Synchronous check for user status immediately
+        handleUserStatusCheck()
+    }
+
+    private fun handleUserStatusCheck() {
+        val currentUser = auth.currentUser
+
+        if (currentUser != null) {
+            Log.d(TAG, "User is logged in, checking Firestore status: ${currentUser.email}")
+            
+            // Setup presence and location listener
+            setupPresenceAndLocation(currentUser.uid)
+
+            db.collection("users").document(currentUser.uid).get()
+                .addOnSuccessListener { document ->
+                    if (document.exists()) {
+
+                        val admin: Boolean = document.getBoolean("admin") ?: false
+                        val verified = document.getBoolean("verified") ?: false
+                        val stepCompleted = document.getLong("stepCompleted")?.toInt() ?: 1
+                        
+                        if (admin) {
+                            Log.d(TAG, "You are an admin, redirecting to AdminActivity")
+                            startActivity(Intent(this, AdminActivity::class.java))
+                        } else if (verified) {
+                            Log.d(TAG, "User is verified, redirecting to HomeActivity")
+                            startActivity(Intent(this, HomeActivity::class.java))
+                            // Start location updates only for verified users after routing
+                            startLocationUpdates(currentUser.uid)
+                        } else {
+                            Log.d(TAG, "User is not verified, redirecting based on stepCompleted: $stepCompleted")
+                            val intent = when (stepCompleted) {
+                                1 -> Intent(this, EmailVerificationActivity::class.java)
+                                2 -> Intent(this, CurrentAddressActivity::class.java)
+                                3 -> Intent(this, AdminApprovalActivity::class.java)
+                                else -> Intent(this, EmailVerificationActivity::class.java)
+                            }
+                            startActivity(intent)
+                        }
+                    } else {
+                        Log.w(TAG, "User document not found in Firestore, creating document")
+                        createUserDocument(currentUser.uid, currentUser.email, currentUser.displayName)
+                        startActivity(Intent(this, MainMenuActivity::class.java))
+                    }
+                    finish() // Finish MainActivity immediately after routing
                 }
-            }, 1000)
+                .addOnFailureListener { exception ->
+                    Log.e(TAG, "Failed to fetch Firestore user data: ${exception.message}")
+                    startActivity(Intent(this, MainMenuActivity::class.java))
+                    finish()
+                }
         } else {
-            Log.d(TAG, "Not a fresh launch or checkUserStatus already ran, redirecting to MainMenuActivity")
-            progressBar.visibility = View.GONE
-            startActivity(Intent(this, MainMenuActivity::class.java))
+            Log.d(TAG, "No user logged in, redirecting to SignInActivity")
+            startActivity(Intent(this, SignInActivity::class.java))
             finish()
         }
     }
@@ -139,76 +162,6 @@ class MainActivity : AppCompatActivity() {
             }
             val token = task.result
             Log.d(TAG, "FCM Token: $token")
-        }
-    }
-
-    private fun checkUserStatus() {
-        val currentUser = auth.currentUser
-        progressBar.visibility = View.GONE
-
-        Log.d(TAG, "Checking user status, currentUser: ${currentUser?.uid ?: "null"}")
-
-        if (currentUser != null) {
-            Log.d(TAG, "User is logged in, checking Firestore for verification status: ${currentUser.email}")
-            db.collection("users").document(currentUser.uid).get()
-                .addOnSuccessListener { document ->
-                    if (document.exists()) {
-
-                        val admin: Boolean = document.getBoolean("admin") ?: false
-                        val verified = document.getBoolean("verified") ?: false
-                        val stepCompleted = document.getLong("stepCompleted")?.toInt() ?: 1
-                        Log.d(TAG, "Firestore data - verified: $verified, stepCompleted: $stepCompleted")
-
-                        // Setup presence and location for all users
-                        setupPresenceAndLocation(currentUser.uid)
-
-                        if (admin) {
-                            Log.d(TAG, "You are an admin, redirecting to AdminActivity")
-                            startActivity(Intent(this, AdminActivity::class.java))
-                            finish()
-                            return@addOnSuccessListener // Exit the lambda to prevent further checks
-                        }
-
-                        if (verified) {
-                            // Store FCM token
-                            getAndLogFCMToken()
-
-                            // Start location updates and state management for verified users
-                            startLocationUpdates(currentUser.uid)
-                        }
-
-                        if (verified) {
-                            Log.d(TAG, "User is verified, redirecting to HomeActivity")
-                            startActivity(Intent(this, HomeActivity::class.java))
-                        } else {
-                            Log.d(TAG, "User is not verified, redirecting based on stepCompleted: $stepCompleted")
-                            val intent = when (stepCompleted) {
-                                1 -> Intent(this, EmailVerificationActivity::class.java)
-                                2 -> Intent(this, CurrentAddressActivity::class.java)
-                                3 -> Intent(this, AdminApprovalActivity::class.java)
-                                else -> {
-                                    Log.w(TAG, "Invalid stepCompleted value, defaulting to EmailVerificationActivity")
-                                    Intent(this, EmailVerificationActivity::class.java)
-                                }
-                            }
-                            startActivity(intent)
-                        }
-                    } else {
-                        Log.w(TAG, "User document not found in Firestore, creating document")
-                        createUserDocument(currentUser.uid, currentUser.email, currentUser.displayName)
-                        startActivity(Intent(this, MainMenuActivity::class.java))
-                    }
-                    finish()
-                }
-                .addOnFailureListener { exception ->
-                    Log.e(TAG, "Failed to fetch Firestore user data: ${exception.message}")
-                    startActivity(Intent(this, MainMenuActivity::class.java))
-                    finish()
-                }
-        } else {
-            Log.d(TAG, "No user logged in, redirecting to MainMenuActivity")
-            startActivity(Intent(this, MainMenuActivity::class.java))
-            finish()
         }
     }
 

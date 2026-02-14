@@ -52,6 +52,7 @@ google-maps-utils = "3.0.0"
 geofire = "3.2.0" # Latest GeoFire Android version
 room = "2.8.4"
 kotlinx-metadata-jvm = "0.9.0"
+workManager = "2.10.0"
 
 # Compose
 androidxComposeBom = "2023.01.00"
@@ -70,6 +71,7 @@ navSdk = "6.3.0"
 
 
 [libraries]
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workManager" }
 navigation-sdk = { module = "com.google.android.libraries.navigation:navigation", version.ref = "navigationSdk" }
 geofire-android = { group = "com.firebase", name = "geofire-android", version.ref = "geofire" }
 androidx-viewpager2 = { module = "androidx.viewpager2:viewpager2", version.ref = "androidx-viewpager2" }

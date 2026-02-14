@@ -125,6 +125,9 @@ dependencies {
     kapt(libs.room.compiler)
     implementation(libs.room.ktx)
     kapt(libs.kotlinx.metadata.jvm)
+
+    // WorkManager for scheduling posts
+    implementation(libs.androidx.work.runtime.ktx)
 }
 
 apply(plugin = "com.google.gms.google-services")

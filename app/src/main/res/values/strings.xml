@@ -10,4 +10,6 @@
     <string name="invalid_password">Password must be >5 characters</string>
     <string name="login_failed">"Login failed"</string>
     <string name="app_logo">App Logo</string>
+    
+    <string name="google_maps_key">AIzaSyBdsslBjsFC919mvY0osI8hAmrPOzFp_LE</string>
 </resources>

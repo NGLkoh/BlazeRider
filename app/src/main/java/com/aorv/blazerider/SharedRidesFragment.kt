@@ -11,9 +11,11 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -56,6 +58,7 @@ class SharedRidesFragment : Fragment() {
                     Log.e(TAG, "Error fetching shared routes: ${error.message}")
                     return@addSnapshotListener
                 }
+                
                 val rides: List<SharedRide> = snapshot?.documents?.mapNotNull { doc ->
                     try {
                         doc.toObject<SharedRide>()?.copy(sharedRoutesId = doc.id)
@@ -65,19 +68,21 @@ class SharedRidesFragment : Fragment() {
                     }
                 } ?: emptyList()
 
-                val visibleRides = rides.filter { it.status != "completed" && it.status != "cancelled" }
+                val now = Timestamp.now()
+                val visibleRides = rides.filter { ride ->
+                    val isStatusActive = ride.status != "completed" && ride.status != "cancelled"
+                    
+                    // Logic: Visible if NOT scheduled OR if it IS scheduled but the publish time (createdAt) has passed
+                    val isVisible = !ride.isScheduled || (ride.createdAt != null && ride.createdAt.seconds <= now.seconds)
+                    
+                    isStatusActive && isVisible
+                }
                 
-                // Show/hide "No shared rides yet" text
                 noSharedRidesText.visibility = if (visibleRides.isEmpty()) View.VISIBLE else View.GONE
-                
                 adapter.submitList(visibleRides)
             }
     }
 
-    /**
-     * Updated Helper Function:
-     * Eliminates Plus Codes by specifically selecting the street and city components.
-     */
     private fun getAddressFromCoords(lat: Double?, lng: Double?): String? {
         if (lat == null || lng == null) return null
         return try {
@@ -85,13 +90,10 @@ class SharedRidesFragment : Fragment() {
             val addresses: List<Address>? = geocoder.getFromLocation(lat, lng, 1)
             if (!addresses.isNullOrEmpty()) {
                 val address = addresses[0]
+                val street = address.thoroughfare
+                val city = address.locality
+                val subLocality = address.subLocality
 
-                // Extracting specific parts to avoid "Plus Codes"
-                val street = address.thoroughfare // e.g., "Oval Road"
-                val city = address.locality // e.g., "Dasmariñas"
-                val subLocality = address.subLocality // neighborhood/barangay
-
-                // Construct a clean string: "Street, City" or just "City" if street is null
                 when {
                     street != null && city != null -> "$street, $city"
                     street != null -> street
@@ -125,26 +127,77 @@ class SharedRidesFragment : Fragment() {
 
         override fun getItemCount(): Int = rides.size
 
-        inner class ViewHolder(private val binding: ItemRidesBinding) : RecyclerView.ViewHolder(binding.root) {
+        inner class ViewHolder(private val binding: ItemRidesBinding) : ViewHolderHelper(binding) {
             fun bind(ride: SharedRide) {
-                // 1. Fetch and display Rider info
+                val cardView = binding.currentRideCard as? MaterialCardView
+                
+                // 1. Background and Border logic for Admin Events
+                if (ride.isAdminEvent) {
+                    binding.currentRideCard.setCardBackgroundColor(ContextCompat.getColor(itemView.context, R.color.red_orange))
+                    
+                    // Add Border
+                    cardView?.strokeColor = ContextCompat.getColor(itemView.context, R.color.white)
+                    cardView?.strokeWidth = 4 // 4px border
+
+                    // Set all text and icons to white
+                    val white = ContextCompat.getColor(itemView.context, R.color.white)
+                    binding.riderName.setTextColor(white)
+                    binding.dateCreated.setTextColor(white)
+                    binding.origin.setTextColor(white)
+                    binding.destination.setTextColor(white)
+                    binding.distance.setTextColor(white)
+                    binding.duration.setTextColor(white)
+                    binding.rideNumbers.setTextColor(white)
+                    
+                    binding.originIcon.setColorFilter(white)
+                    binding.destinationIcon.setColorFilter(white)
+                    binding.distanceIcon.setColorFilter(white)
+                    binding.durationIcon.setColorFilter(white)
+                    
+                    // Also set live text to white if needed
+                    binding.liveText.setTextColor(white)
+                } else {
+                    // Standard User Card
+                    binding.currentRideCard.setCardBackgroundColor(ContextCompat.getColor(itemView.context, R.color.white))
+                    
+                    // Remove Border
+                    cardView?.strokeWidth = 0
+
+                    binding.riderName.setTextColor(ContextCompat.getColor(itemView.context, R.color.black))
+                    binding.dateCreated.setTextColor(ContextCompat.getColor(itemView.context, R.color.gray))
+                    val black = ContextCompat.getColor(itemView.context, R.color.black)
+                    binding.origin.setTextColor(black)
+                    binding.destination.setTextColor(black)
+                    binding.distance.setTextColor(black)
+                    binding.duration.setTextColor(black)
+                    binding.rideNumbers.setTextColor(black)
+
+                    val darkGray = ContextCompat.getColor(itemView.context, R.color.dark_gray)
+                    binding.originIcon.setColorFilter(darkGray)
+                    binding.destinationIcon.setColorFilter(darkGray)
+                    binding.distanceIcon.setColorFilter(darkGray)
+                    binding.durationIcon.setColorFilter(darkGray)
+                    
+                    binding.liveText.setTextColor(ContextCompat.getColor(itemView.context, android.R.color.holo_red_dark))
+                }
+
+                // 2. Load User Info
                 ride.userUid?.let { uid ->
                     firestore.collection("users").document(uid).get()
                         .addOnSuccessListener { userDoc ->
                             val user = userDoc.toObject<User>()
-                            binding.riderName.text = "${user?.firstName} ${user?.lastName}"
+                            binding.riderName.text = if (ride.isAdminEvent) "OFFICIAL EVENT: ${user?.firstName} ${user?.lastName}" else "${user?.firstName} ${user?.lastName}"
                             Glide.with(binding.profilePicture.context)
                                 .load(user?.profileImageUrl ?: R.drawable.ic_anonymous)
                                 .into(binding.profilePicture)
                         }
                 }
 
-                // 2. Display Ride Details
+                // 3. Display Data
                 binding.dateCreated.text = ride.datetime?.toDate()?.let {
                     SimpleDateFormat("d MMMM yyyy 'at' HH:mm:ss", Locale.getDefault()).format(it)
                 } ?: "Unknown"
 
-                // Check if origin is "Current Location" and display clean geocoded address
                 val rawOrigin = ride.origin ?: "Unknown"
                 if (rawOrigin.equals("Current Location", ignoreCase = true)) {
                     val lat = ride.originCoordinates?.get("latitude") as? Double
@@ -162,42 +215,202 @@ class SharedRidesFragment : Fragment() {
                 val ridersCount = ride.joinedRiders?.size ?: 0
                 binding.rideNumbers.text = "$ridersCount joined"
 
+                // 4. Handle Ongoing Indicator
+                if (ride.status == "ongoing") {
+                    binding.liveIndicator.visibility = View.VISIBLE
+                    binding.liveText.visibility = View.VISIBLE
+                } else {
+                    binding.liveIndicator.visibility = View.GONE
+                    binding.liveText.visibility = View.GONE
+                }
+
                 setupButtons(ride)
             }
 
             private fun setupButtons(ride: SharedRide) {
-                auth.currentUser?.uid?.let { userId ->
-                    val isRideCreator = ride.userUid == userId
-                    val isRiderJoined = ride.joinedRiders?.containsKey(userId) == true
+                val userId = auth.currentUser?.uid ?: return
+                val isRideCreator = ride.userUid == userId
+                val isRiderJoined = ride.joinedRiders?.containsKey(userId) == true
 
-                    if (isRideCreator || isRiderJoined) {
-                        binding.joinRideBtn.visibility = View.GONE
-                        binding.previewRideBtn.visibility = View.VISIBLE
-                        binding.startRouteBtn.visibility = View.VISIBLE
+                // Reset visibilities using camelCase names generated by ViewBinding
+                binding.joinRideBtn.visibility = View.GONE
+                binding.leaveRideBtn.visibility = View.GONE
+                binding.cancelRideBtn.visibility = View.GONE
+                binding.startRouteBtn.visibility = View.GONE
+                binding.previewRideBtn.visibility = View.VISIBLE
+                binding.arrivedBtn.visibility = View.GONE
+
+                if (isRideCreator) {
+                    // Creator can Cancel or Start/Arrive
+                    binding.cancelRideBtn.visibility = View.VISIBLE
+                    if (ride.status == "ongoing") {
+                        binding.arrivedBtn.visibility = View.VISIBLE
+                        binding.startRouteBtn.visibility = View.VISIBLE // Re-open nav
+                        binding.startRouteBtn.text = "Continue Route"
                     } else {
-                        binding.joinRideBtn.visibility = View.VISIBLE
-                        binding.previewRideBtn.visibility = View.VISIBLE
-                        binding.startRouteBtn.visibility = View.GONE
+                        binding.startRouteBtn.visibility = View.VISIBLE
+                        binding.startRouteBtn.text = "Start Route"
                     }
+                } else if (isRiderJoined) {
+                    // Joined rider can Leave
+                    binding.leaveRideBtn.visibility = View.VISIBLE
+                    if (ride.status == "ongoing") {
+                        binding.startRouteBtn.visibility = View.VISIBLE
+                    }
+                } else {
+                    // Others can Join
+                    binding.joinRideBtn.visibility = View.VISIBLE
                 }
 
+                // Listeners using camelCase names
                 binding.root.setOnClickListener { openPreview(ride) }
                 binding.previewRideBtn.setOnClickListener { openPreview(ride) }
                 binding.joinRideBtn.setOnClickListener { handleJoinClick(ride) }
+                binding.cancelRideBtn.setOnClickListener { showCancelConfirmation(ride) }
+                binding.leaveRideBtn.setOnClickListener { showLeaveConfirmation(ride) }
+                binding.arrivedBtn.setOnClickListener { showArrivedConfirmation(ride) }
 
                 binding.startRouteBtn.setOnClickListener {
-                    val lat = ride.destinationCoordinates?.get("latitude")
-                    val lng = ride.destinationCoordinates?.get("longitude")
-                    if (lat != null && lng != null) {
-                        val gmmIntentUri = Uri.parse("google.navigation:q=$lat,$lng")
-                        val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
-                        mapIntent.setPackage("com.google.android.apps.maps")
-                        if (mapIntent.resolveActivity(requireContext().packageManager) != null) {
-                            startActivity(mapIntent)
-                        } else {
-                            startActivity(Intent(Intent.ACTION_VIEW, gmmIntentUri))
+                    startNavigation(ride)
+                }
+            }
+
+            private fun startNavigation(ride: SharedRide) {
+                // If creator starts, mark as ongoing
+                if (ride.userUid == auth.currentUser?.uid && ride.status != "ongoing") {
+                    ride.sharedRoutesId?.let { id ->
+                        firestore.collection("sharedRoutes").document(id)
+                            .update("status", "ongoing")
+                    }
+                }
+
+                val lat = ride.destinationCoordinates?.get("latitude")
+                val lng = ride.destinationCoordinates?.get("longitude")
+                if (lat != null && lng != null) {
+                    val gmmIntentUri = Uri.parse("google.navigation:q=$lat,$lng")
+                    val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
+                    mapIntent.setPackage("com.google.android.apps.maps")
+                    if (mapIntent.resolveActivity(requireContext().packageManager) != null) {
+                        startActivity(mapIntent)
+                    } else {
+                        startActivity(Intent(Intent.ACTION_VIEW, gmmIntentUri))
+                    }
+                }
+            }
+
+            private fun showCancelConfirmation(ride: SharedRide) {
+                MaterialAlertDialogBuilder(requireContext())
+                    .setTitle("Cancel Ride")
+                    .setMessage("Are you sure you want to cancel this ride event?")
+                    .setPositiveButton("Yes") { _, _ ->
+                        cancelRide(ride)
+                    }
+                    .setNegativeButton("No", null)
+                    .show()
+            }
+
+            private fun cancelRide(ride: SharedRide) {
+                val userId = auth.currentUser?.uid ?: return
+                val rideId = ride.sharedRoutesId ?: return
+
+                firestore.runTransaction { transaction ->
+                    val rideRef = firestore.collection("sharedRoutes").document(rideId)
+                    transaction.update(rideRef, "status", "cancelled")
+                    transaction.update(firestore.collection("users").document(userId), "currentJoinedRide", null)
+
+                    // Log cancelled ride to history for the creator
+                    val cancelledRideHistory = RideHistory(
+                        datetime = Timestamp.now(),
+                        destination = ride.destination,
+                        distance = ride.distance,
+                        duration = ride.duration,
+                        origin = ride.origin,
+                        status = "Cancelled",
+                        userUid = userId,
+                        sharedRoutesId = rideId
+                    )
+                    val historyRef = firestore.collection("users").document(userId).collection("rideHistory").document()
+                    transaction.set(historyRef, cancelledRideHistory)
+
+                    ride.joinedRiders?.keys?.forEach { riderId ->
+                        transaction.update(firestore.collection("users").document(riderId), "currentJoinedRide", null)
+                        val notifRef = firestore.collection("users").document(riderId).collection("notifications").document()
+                        transaction.set(notifRef, mapOf(
+                            "actorId" to userId,
+                            "createdAt" to Timestamp.now(),
+                            "message" to "The ride from ${ride.origin} has been cancelled.",
+                            "type" to "ride_cancelled",
+                            "isRead" to false
+                        ))
+                    }
+                    null
+                }.addOnSuccessListener {
+                    if (isAdded) Toast.makeText(requireContext(), "Ride cancelled and logged to history", Toast.LENGTH_SHORT).show()
+                }.addOnFailureListener { e ->
+                    Log.e(TAG, "Error cancelling ride: ${e.message}")
+                    if (isAdded) Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            private fun showLeaveConfirmation(ride: SharedRide) {
+                MaterialAlertDialogBuilder(requireContext())
+                    .setTitle("Leave Ride")
+                    .setMessage("Are you sure you want to leave this ride?")
+                    .setPositiveButton("Yes") { _, _ ->
+                        val userId = auth.currentUser?.uid ?: return@setPositiveButton
+                        ride.sharedRoutesId?.let { id ->
+                            val updates = hashMapOf<String, Any>(
+                                "joinedRiders.$userId" to com.google.firebase.firestore.FieldValue.delete()
+                            )
+                            firestore.collection("sharedRoutes").document(id).update(updates)
                         }
                     }
+                    .setNegativeButton("No", null)
+                    .show()
+            }
+            
+            private fun showArrivedConfirmation(ride: SharedRide) {
+                MaterialAlertDialogBuilder(requireContext())
+                    .setTitle("Arrived")
+                    .setMessage("Have you reached the destination?")
+                    .setPositiveButton("Yes") { _, _ ->
+                        completeRide(ride)
+                    }
+                    .setNegativeButton("No", null)
+                    .show()
+            }
+
+            private fun completeRide(ride: SharedRide) {
+                val userId = auth.currentUser?.uid ?: return
+                val rideId = ride.sharedRoutesId ?: return
+
+                val rideHistory = RideHistory(
+                    datetime = Timestamp.now(),
+                    destination = ride.destination,
+                    distance = ride.distance,
+                    duration = ride.duration,
+                    origin = ride.origin,
+                    status = "Completed",
+                    userUid = userId,
+                    sharedRoutesId = rideId
+                )
+
+                val batch = firestore.batch()
+                val userRef = firestore.collection("users").document(userId)
+                batch.update(userRef, "currentJoinedRide", null)
+
+                val historyRef = firestore.collection("users").document(userId).collection("rideHistory").document()
+                batch.set(historyRef, rideHistory)
+
+                val rideRef = firestore.collection("sharedRoutes").document(rideId)
+                batch.update(rideRef, "status", "completed")
+
+                batch.commit().addOnSuccessListener {
+                    if (isAdded) {
+                        Toast.makeText(requireContext(), "Ride completed!", Toast.LENGTH_SHORT).show()
+                    }
+                }.addOnFailureListener { e ->
+                    Log.e(TAG, "Error completing ride: ${e.message}")
                 }
             }
 
@@ -279,4 +492,6 @@ class SharedRidesFragment : Fragment() {
             }
         }
     }
+
+    open inner class ViewHolderHelper(viewBinding: ItemRidesBinding) : RecyclerView.ViewHolder(viewBinding.root)
 }

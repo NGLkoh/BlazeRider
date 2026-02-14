@@ -12,6 +12,7 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
@@ -136,6 +137,8 @@ class StartRouteActivity : AppCompatActivity() {
 
                     navView.getMapAsync { googleMap ->
                         googleMap.followMyLocation(GoogleMap.CameraPerspective.TILTED)
+                        // Hide the "center location" button
+                        googleMap.uiSettings.isMyLocationButtonEnabled = false
                     }
 
                     // Navigate to the passed destination
@@ -246,10 +249,8 @@ class StartRouteActivity : AppCompatActivity() {
         withNavigatorAsync {
             arrivalListener =
                 Navigator.ArrivalListener {
-                    showToast("User has arrived at the destination!")
-                    logRideHistory("Arrived")
-                    mNavigator?.clearDestinations()
-
+                    showArrivalDialog()
+                    
                     // Stop simulating vehicle movement
                     if (BuildConfig.DEBUG) {
                         mNavigator?.simulator?.unsetUserLocation()
@@ -263,6 +264,29 @@ class StartRouteActivity : AppCompatActivity() {
                 }
             mNavigator?.addRouteChangedListener(routeChangedListener)
         }
+    }
+
+    private fun showArrivalDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Arrived!")
+            .setMessage("You have reached your destination. What would you like to do?")
+            .setPositiveButton("Arrived") { _, _ ->
+                logRideHistory("Arrived")
+                mNavigator?.clearDestinations()
+                finish()
+            }
+            .setNeutralButton("Manual Arrive") { _, _ ->
+                logRideHistory("Arrived (Manual)")
+                mNavigator?.clearDestinations()
+                finish()
+            }
+            .setNegativeButton("Leave") { _, _ ->
+                logRideHistory("Left Destination")
+                mNavigator?.clearDestinations()
+                finish()
+            }
+            .setCancelable(false)
+            .show()
     }
 
     companion object {

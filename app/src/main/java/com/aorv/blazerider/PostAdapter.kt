@@ -1,11 +1,9 @@
 package com.aorv.blazerider
 
 import android.app.AlertDialog
-import android.os.Handler
-import android.os.Looper
-import android.util.Log
+import android.content.Intent
+import android.net.Uri
 import android.view.LayoutInflater
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
@@ -15,10 +13,11 @@ import android.widget.PopupWindow
 import android.widget.TextView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
-import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.fragment.app.FragmentActivity
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.bumptech.glide.Glide
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.imageview.ShapeableImageView
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
@@ -29,7 +28,7 @@ import java.util.*
 class PostAdapter(
     private val onDeletePost: (Post) -> Unit,
     private val onCommentClick: (Post) -> Unit,
-    private val isAnnouncement: Boolean = false // <--- NEW PARAMETER
+    private val isAnnouncement: Boolean = false
 ) : RecyclerView.Adapter<PostAdapter.PostViewHolder>() {
 
     private var posts = listOf<Post>()
@@ -50,11 +49,6 @@ class PostAdapter(
 
     override fun getItemCount(): Int = posts.size
 
-    override fun onViewRecycled(holder: PostViewHolder) {
-        super.onViewRecycled(holder)
-        holder.cleanup()
-    }
-
     inner class PostViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val profilePic = itemView.findViewById<ShapeableImageView>(R.id.post_profile_pic)
         private val userName = itemView.findViewById<TextView>(R.id.post_user_name)
@@ -63,235 +57,109 @@ class PostAdapter(
         private val imageContainer = itemView.findViewById<ConstraintLayout>(R.id.post_image_container)
         private val imageViewPager = itemView.findViewById<ViewPager2>(R.id.post_image_view_pager)
         private val imageCounter = itemView.findViewById<TextView>(R.id.post_image_counter)
+        
+        private val likeContainer = itemView.findViewById<LinearLayout>(R.id.like_container)
         private val likeIcon = itemView.findViewById<ImageView>(R.id.post_like_icon)
         private val likeText = itemView.findViewById<TextView>(R.id.post_like_text)
+        
         private val commentContainer = itemView.findViewById<LinearLayout>(R.id.comment_container)
-        private val shareContainer = itemView.findViewById<LinearLayout>(R.id.share_container)
         private val reactionsCount = itemView.findViewById<TextView>(R.id.post_reactions_count)
         private val commentsCount = itemView.findViewById<TextView>(R.id.post_comments_count)
         private val adminBadge = itemView.findViewById<TextView>(R.id.post_admin_badge)
         private val postOptionsIcon = itemView.findViewById<ImageView>(R.id.post_options_icon)
 
-        // Badge Views
-        private val scheduledBadgeContainer = itemView.findViewById<LinearLayout>(R.id.scheduled_badge_container)
-        private val scheduledTimeText = itemView.findViewById<TextView>(R.id.scheduled_time_text)
-        private val scheduledIcon = itemView.findViewById<ImageView>(R.id.scheduled_icon) // Ensure this ID exists or use childAt(0)
+        private val rideControlsContainer = itemView.findViewById<LinearLayout>(R.id.ride_controls_container)
+        private val btnStartRoute = itemView.findViewById<MaterialButton>(R.id.btnPostStartRoute)
+        private val btnArrived = itemView.findViewById<MaterialButton>(R.id.btnPostArrived)
+        private val btnCancel = itemView.findViewById<MaterialButton>(R.id.btnPostCancel)
 
-        private var pageChangeCallback: ViewPager2.OnPageChangeCallback? = null
         private val db = FirebaseFirestore.getInstance()
         private val auth = FirebaseAuth.getInstance()
-
-        private val longClickHandler = Handler(Looper.getMainLooper())
-        private var longClickRunnable: Runnable? = null
+        
         private var currentReaction: String? = null
-
-        fun cleanup() {
-            pageChangeCallback?.let { imageViewPager.unregisterOnPageChangeCallback(it) }
-            pageChangeCallback = null
-            longClickRunnable?.let { longClickHandler.removeCallbacks(it) }
-            longClickRunnable = null
-        }
+        private var boundPost: Post? = null
 
         fun bind(post: Post) {
-            cleanup()
+            boundPost = post
+            currentReaction = null
+            updateLikeIcon(null)
 
-            // Option Menu Logic
-            if (post.userId == auth.currentUser?.uid) {
+            db.collection("users").document(post.userId).get().addOnSuccessListener { document ->
+                if (document.exists()) {
+                    userName.text = "${document.getString("firstName")} ${document.getString("lastName")}"
+                    Glide.with(itemView.context).load(document.getString("profileImageUrl"))
+                        .placeholder(R.drawable.ic_anonymous).into(profilePic)
+                }
+            }
+
+            content.text = post.content
+            timestamp.text = post.createdAt?.let { SimpleDateFormat("MMM dd, yyyy • hh:mm a", Locale.getDefault()).format(it) } ?: ""
+            adminBadge.visibility = if (post.admin) View.VISIBLE else View.GONE
+
+            val isMyPost = post.userId == auth.currentUser?.uid
+            
+            // Show options (like delete) only if it's my post
+            if (isMyPost) {
                 postOptionsIcon.visibility = View.VISIBLE
-                postOptionsIcon.setOnClickListener { showPostOptionsMenu(it, post) }
+                postOptionsIcon.setOnClickListener { showPostMenu(it, post) }
             } else {
                 postOptionsIcon.visibility = View.GONE
             }
 
-            // Load User Data
-            db.collection("users").document(post.userId).get()
-                .addOnSuccessListener { document ->
-                    if (adapterPosition == RecyclerView.NO_POSITION) return@addOnSuccessListener
-                    if (document.exists()) {
-                        val firstName = document.getString("firstName") ?: ""
-                        val lastName = document.getString("lastName") ?: ""
-                        userName.text = "$firstName $lastName".trim()
-                        val profileImageUrl = document.getString("profileImageUrl")
-                        Glide.with(itemView.context)
-                            .load(profileImageUrl)
-                            .placeholder(R.drawable.ic_anonymous)
-                            .error(R.drawable.ic_anonymous)
-                            .into(profilePic)
-                    }
-                }
-                .addOnFailureListener {
-                    Glide.with(itemView.context).load(R.drawable.ic_anonymous).into(profilePic)
-                }
-
-            content.text = post.content
-
-            // ==========================================================
-            //                 UPDATED TIME & BADGE LOGIC
-            // ==========================================================
-            val date = post.createdAt
-            if (date != null) {
-                val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
-                val timeFormat = SimpleDateFormat("hh:mm a", Locale.getDefault())
-
-                val dateString = dateFormat.format(date)
-                val timeString = timeFormat.format(date)
-
-                // 1. If it's the Announcements Screen
-                if (isAnnouncement) {
-                    scheduledBadgeContainer?.visibility = View.GONE
-                    // Just show date (or date + time if you prefer)
-                    timestamp.text = dateString
-                }
-                // 2. If it's the Events Screen AND it's an Admin Post
-                else if (post.admin && scheduledBadgeContainer != null && scheduledTimeText != null) {
-                    scheduledBadgeContainer.visibility = View.VISIBLE
-                    timestamp.text = dateString // Main timestamp is just date
-
-                    if (post.isScheduled) {
-                        // CASE: Scheduled -> Show "Scheduled • 03:41 PM"
-                        scheduledTimeText.text = "Scheduled • $timeString"
-                    } else {
-                        // CASE: Posted Now -> Show just "03:41 PM" (No "Event" word)
-                        scheduledTimeText.text = timeString
-                    }
-                }
-                // 3. Regular User Post
-                else {
-                    scheduledBadgeContainer?.visibility = View.GONE
-                    timestamp.text = "$dateString • $timeString"
-                }
+            val isRideEvent = post.type == "ride_event" || post.content.contains("NEW RIDE ALERT")
+            
+            if (post.admin && isMyPost && isRideEvent && post.sharedRouteId.isNotEmpty()) {
+                rideControlsContainer.visibility = View.VISIBLE
+                setupRideControls(post)
             } else {
-                timestamp.text = ""
-                scheduledBadgeContainer?.visibility = View.GONE
+                rideControlsContainer.visibility = View.GONE
             }
-            // ==========================================================
 
-            adminBadge?.visibility = if (post.admin) View.VISIBLE else View.GONE
-            adminBadge?.text = "Admin"
-
-            // ... (Rest of Image Logic, Reactions, Click Listeners remains exactly the same)
             setupImages(post)
             setupReactions(post)
-            setupClicks(post)
-        }
-
-        // Helper methods to keep bind() clean (logic copied from your previous code)
-        private fun setupImages(post: Post) {
-            if (post.imageUris.isNotEmpty()) {
-                imageContainer.visibility = View.VISIBLE
-                imageViewPager.adapter = ImagePagerAdapter(post.imageUris)
-                imageViewPager.setCurrentItem(0, false)
-                if (post.imageUris.size > 1) {
-                    imageCounter.visibility = View.VISIBLE
-                    imageCounter.text = "1/${post.imageUris.size}"
-                    pageChangeCallback = object : ViewPager2.OnPageChangeCallback() {
-                        override fun onPageSelected(position: Int) {
-                            if (adapterPosition == RecyclerView.NO_POSITION) return
-                            imageCounter.text = "${position + 1}/${post.imageUris.size}"
-                        }
-                    }
-                    pageChangeCallback?.let { imageViewPager.registerOnPageChangeCallback(it) }
-                } else {
-                    imageCounter.visibility = View.GONE
-                }
-            } else {
-                imageContainer.visibility = View.GONE
-                imageCounter.visibility = View.GONE
-            }
-        }
-
-        private fun setupReactions(post: Post) {
-            val totalReactions = post.reactionCount.values.sum()
-            reactionsCount.text = when { totalReactions > 0 -> "$totalReactions reactions" else -> "" }
-            reactionsCount.setOnClickListener { if (totalReactions > 0) showReactionsDialog(post.id) }
-
-            val numComments = post.commentsCount
-            if (numComments > 0) {
-                commentsCount.visibility = View.VISIBLE
-                commentsCount.text = if (numComments == 1L) "1 comment" else "$numComments comments"
-            } else {
-                commentsCount.visibility = View.GONE
-            }
-
-            val user = auth.currentUser
-            if (user != null) {
-                db.collection("posts").document(post.id)
-                    .collection("reactions").document(user.uid).get()
-                    .addOnSuccessListener { document ->
-                        if (adapterPosition != RecyclerView.NO_POSITION) {
-                            val reactionType = document.getString("reactionType")
-                            this.currentReaction = reactionType
-                            updateLikeIcon(reactionType)
-                        }
-                    }
-            } else {
-                this.currentReaction = null
-                updateLikeIcon(null)
-            }
-        }
-
-        private fun setupClicks(post: Post) {
-            likeIcon.setOnClickListener { handleLikeClick(post.id) }
-            longClickRunnable = Runnable { showReactionPicker(post.id) }
-            likeIcon.setOnTouchListener { _, event ->
-                when (event.action) {
-                    MotionEvent.ACTION_DOWN -> longClickHandler.postDelayed(longClickRunnable!!, 200)
-                    MotionEvent.ACTION_UP -> longClickHandler.removeCallbacks(longClickRunnable!!)
-                }
-                false
-            }
+            
             commentContainer.setOnClickListener { onCommentClick(post) }
-        }
+            
+            likeContainer.setOnClickListener { handleLikeClick() }
+            likeContainer.setOnLongClickListener {
+                showReactionPicker()
+                true
+            }
+            
+            // NEW: Click listener for reactions count
+            reactionsCount.setOnClickListener {
+                if (post.reactionCount.values.sum() > 0) {
+                    showReactionsDialog(post.id)
+                }
+            }
 
-        // ... (Keep your showReactionsDialog, showPostOptionsMenu, updateLikeIcon, updateReaction etc. methods here)
-        private fun showReactionsDialog(postId: String) {
-            val dialogView = LayoutInflater.from(itemView.context).inflate(R.layout.dialog_reactions, null)
-            val reactionsRecyclerView = dialogView.findViewById<RecyclerView>(R.id.reactions_recycler_view)
-            reactionsRecyclerView.layoutManager = LinearLayoutManager(itemView.context)
-
-            db.collection("posts").document(postId).collection("reactions").get()
-                .addOnSuccessListener { snapshot ->
-                    val reactions = mutableListOf<Reaction>()
-                    for (document in snapshot.documents) {
-                        val reaction = document.toObject(Reaction::class.java)
-                        if (reaction != null) {
-                            db.collection("users").document(reaction.userId).get()
-                                .addOnSuccessListener { userDoc ->
-                                    val profilePicUrl = userDoc.getString("profileImageUrl") ?: ""
-                                    reactions.add(reaction.copy(userProfilePictureUrl = profilePicUrl))
-                                    if (reactions.size == snapshot.documents.size) {
-                                        reactionsRecyclerView.adapter = ReactionsAdapter(reactions)
-                                    }
-                                }
+            auth.currentUser?.uid?.let { uid ->
+                db.collection("posts").document(post.id).collection("reactions").document(uid).get()
+                    .addOnSuccessListener { doc ->
+                        if (boundPost?.id == post.id) {
+                            currentReaction = doc.getString("reactionType")
+                            updateLikeIcon(currentReaction)
                         }
                     }
-                }
-
-            AlertDialog.Builder(itemView.context)
-                .setView(dialogView)
-                .setPositiveButton("Close", null)
-                .show()
+            }
         }
 
-        private fun showPostOptionsMenu(view: View, post: Post) {
-            val popup = PopupMenu(view.context, view)
-            popup.menuInflater.inflate(R.menu.post_options_menu, popup.menu)
+        private fun showPostMenu(view: View, post: Post) {
+            val popup = PopupMenu(itemView.context, view)
+            popup.menu.add("Delete")
             popup.setOnMenuItemClickListener { item ->
-                when (item.itemId) {
-                    R.id.delete_post -> {
-                        showDeleteConfirmationDialog(post)
-                        true
-                    }
-                    else -> false
+                if (item.title == "Delete") {
+                    showDeleteConfirmation(post)
                 }
+                true
             }
             popup.show()
         }
 
-        private fun showDeleteConfirmationDialog(post: Post) {
+        private fun showDeleteConfirmation(post: Post) {
             AlertDialog.Builder(itemView.context)
                 .setTitle("Delete Post")
-                .setMessage("Are you sure you want to delete this post?")
+                .setMessage("Are you sure you want to delete this post? This action cannot be undone.")
                 .setPositiveButton("Delete") { _, _ ->
                     onDeletePost(post)
                 }
@@ -299,18 +167,20 @@ class PostAdapter(
                 .show()
         }
 
-        private fun handleLikeClick(postId: String) {
-            val oldReaction = this.currentReaction
+        private fun handleLikeClick() {
+            val post = boundPost ?: return
+            val oldReaction = currentReaction
             if (oldReaction == "like") {
-                this.currentReaction = null
-                removeReaction(postId, "like")
+                currentReaction = null
+                removeReaction(post.id, "like")
             } else {
-                this.currentReaction = "like"
-                updateReaction(postId, "like", oldReaction)
+                currentReaction = "like"
+                updateReaction(post.id, "like", oldReaction)
             }
         }
 
-        private fun showReactionPicker(postId: String) {
+        private fun showReactionPicker() {
+            val post = boundPost ?: return
             val inflater = LayoutInflater.from(itemView.context)
             val popupView = inflater.inflate(R.layout.layout_reaction_popup, null)
             val popupWindow = PopupWindow(popupView, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true)
@@ -322,18 +192,23 @@ class PostAdapter(
 
             reactions.forEach { (viewId, reactionType) ->
                 popupView.findViewById<ImageView>(viewId).setOnClickListener {
-                    val oldReaction = this.currentReaction
+                    val oldReaction = currentReaction
                     if (oldReaction != reactionType) {
-                        this.currentReaction = reactionType
-                        updateReaction(postId, reactionType, oldReaction)
+                        currentReaction = reactionType
+                        updateReaction(post.id, reactionType, oldReaction)
                     }
                     popupWindow.dismiss()
                 }
             }
 
-            val location = IntArray(2)
-            likeIcon.getLocationOnScreen(location)
-            popupWindow.showAsDropDown(likeIcon, 0, -likeIcon.height - popupView.measuredHeight - 16)
+            popupWindow.elevation = 10f
+            popupWindow.showAsDropDown(likeContainer, 0, -likeContainer.height - 280)
+        }
+
+        private fun showReactionsDialog(postId: String) {
+            val context = itemView.context as? FragmentActivity ?: return
+            val dialog = ShowReactionsDialogFragment.newInstance(postId)
+            dialog.show(context.supportFragmentManager, "ReactionsDialog")
         }
 
         private fun updateLikeIcon(reactionType: String?) {
@@ -349,9 +224,12 @@ class PostAdapter(
             likeIcon.setImageResource(iconRes)
             likeText.text = text
             if (reactionType == null) {
-                likeIcon.setColorFilter(ContextCompat.getColor(itemView.context, R.color.teal_200))
+                likeIcon.setColorFilter(ContextCompat.getColor(itemView.context, R.color.dark_gray))
+                likeText.setTextColor(ContextCompat.getColor(itemView.context, R.color.dark_gray))
             } else {
                 likeIcon.clearColorFilter()
+                val color = if (reactionType == "like") R.color.blue else R.color.red_orange
+                likeText.setTextColor(ContextCompat.getColor(itemView.context, color))
             }
         }
 
@@ -360,60 +238,21 @@ class PostAdapter(
             updateLikeIcon(newReaction)
             val postRef = db.collection("posts").document(postId)
             val reactionRef = postRef.collection("reactions").document(user.uid)
-            val userRef = db.collection("users").document(user.uid)
 
             db.runTransaction { transaction ->
                 val postSnapshot = transaction.get(postRef)
-                val postAuthorId = postSnapshot.getString("userId")
-
-                // Only send a notification if the person reacting is not the post author
-                if (postAuthorId != null && postAuthorId != user.uid) {
-                    val userDoc = transaction.get(userRef)
-                    val firstName = userDoc.getString("firstName") ?: ""
-                    val lastName = userDoc.getString("lastName") ?: ""
-                    val reactorName = "$firstName $lastName".trim()
-
-                    val notificationMessage = "$reactorName reacted $newReaction to your post"
-
-                    val notification = com.aorv.blazerider.Notification(
-                        actorId = user.uid,
-                        entityId = postId,
-                        entityType = "post",
-                        message = notificationMessage,
-                        type = "reaction",
-                        createdAt = com.google.firebase.Timestamp.now(),
-                        isRead = false
-                    )
-
-                    db.collection("users").document(postAuthorId)
-                        .collection("notifications")
-                        .add(notification)
-                }
-
-                val reactionCount = postSnapshot.get("reactionCount") as? Map<String, Long> ?: emptyMap()
+                val reactionCount = postSnapshot.get("reactionCount") as? Map<String, Any> ?: emptyMap()
                 val updatedCount = reactionCount.toMutableMap()
 
                 if (oldReaction != null && oldReaction != newReaction) {
-                    val currentOldCount = updatedCount[oldReaction] ?: 0L
-                    if (currentOldCount > 0) {
-                        updatedCount[oldReaction] = currentOldCount - 1
-                    }
+                    val currentOldCount = (updatedCount[oldReaction] as? Long) ?: 0L
+                    if (currentOldCount > 0) updatedCount[oldReaction] = currentOldCount - 1
                 }
-                updatedCount[newReaction] = (updatedCount[newReaction] ?: 0L) + 1
+                updatedCount[newReaction] = ((updatedCount[newReaction] as? Long) ?: 0L) + 1
 
-                val userDoc = transaction.get(userRef)
-                val firstName = userDoc.getString("firstName") ?: ""
-                val lastName = userDoc.getString("lastName") ?: ""
-                val userFullName = "$firstName $lastName".trim()
-
-                transaction.set(reactionRef, mapOf("reactionType" to newReaction, "timestamp" to FieldValue.serverTimestamp(), "userId" to user.uid, "userFullName" to userFullName))
+                transaction.set(reactionRef, mapOf("reactionType" to newReaction, "timestamp" to FieldValue.serverTimestamp(), "userId" to user.uid))
                 transaction.update(postRef, "reactionCount", updatedCount)
                 null
-            }.addOnFailureListener {
-                if (adapterPosition == RecyclerView.NO_POSITION) return@addOnFailureListener
-                this.currentReaction = oldReaction
-                updateLikeIcon(oldReaction)
-                Log.e("PostViewHolder", "Failed to update reaction", it)
             }
         }
 
@@ -424,49 +263,100 @@ class PostAdapter(
             val reactionRef = postRef.collection("reactions").document(user.uid)
 
             db.runTransaction { transaction ->
-                val post = transaction.get(postRef)
-                val reactionCount = post.get("reactionCount") as? Map<String, Long> ?: emptyMap()
+                val postSnapshot = transaction.get(postRef)
+                val reactionCount = postSnapshot.get("reactionCount") as? Map<String, Any> ?: emptyMap()
                 val updatedCount = reactionCount.toMutableMap()
 
                 if (oldReaction != null) {
-                    val currentCount = updatedCount[oldReaction] ?: 0L
-                    if (currentCount > 0) {
-                        updatedCount[oldReaction] = currentCount - 1
-                    }
+                    val currentCount = (updatedCount[oldReaction] as? Long) ?: 0L
+                    if (currentCount > 0) updatedCount[oldReaction] = currentCount - 1
                 }
 
                 transaction.delete(reactionRef)
                 transaction.update(postRef, "reactionCount", updatedCount)
                 null
-            }.addOnFailureListener {
-                if (adapterPosition == RecyclerView.NO_POSITION) return@addOnFailureListener
-                this.currentReaction = oldReaction
-                updateLikeIcon(oldReaction)
-                Log.e("PostViewHolder", "Failed to remove reaction", it)
             }
+        }
+
+        private fun setupRideControls(post: Post) {
+            db.collection("sharedRoutes").document(post.sharedRouteId)
+                .addSnapshotListener { snapshot, _ ->
+                    if (snapshot == null || !snapshot.exists()) {
+                        rideControlsContainer.visibility = View.GONE
+                        return@addSnapshotListener
+                    }
+                    val status = snapshot.getString("status") ?: "active"
+                    if (status == "completed" || status == "cancelled") {
+                        rideControlsContainer.visibility = View.GONE
+                        return@addSnapshotListener
+                    }
+                    rideControlsContainer.visibility = View.VISIBLE
+                    if (status == "ongoing") {
+                        btnArrived.visibility = View.VISIBLE
+                        btnStartRoute.text = "Continue Route"
+                    } else {
+                        btnArrived.visibility = View.GONE
+                        btnStartRoute.text = "Start Route"
+                    }
+                    btnStartRoute.setOnClickListener {
+                        if (status != "ongoing") {
+                            db.collection("sharedRoutes").document(post.sharedRouteId).update("status", "ongoing")
+                        }
+                        openNavigation(snapshot.get("destinationCoordinates") as? Map<String, Double>)
+                    }
+                    btnArrived.setOnClickListener {
+                        showConfirmation("Arrived", "Have you reached the destination?") {
+                            db.collection("sharedRoutes").document(post.sharedRouteId).update("status", "completed")
+                        }
+                    }
+                    btnCancel.setOnClickListener {
+                        showConfirmation("Cancel Ride", "Are you sure you want to cancel this ride event?") {
+                            db.collection("sharedRoutes").document(post.sharedRouteId).update("status", "cancelled")
+                        }
+                    }
+                }
+        }
+
+        private fun openNavigation(coords: Map<String, Double>?) {
+            val lat = coords?.get("latitude") ?: return
+            val lng = coords["longitude"] ?: return
+            val uri = Uri.parse("google.navigation:q=$lat,$lng")
+            val intent = Intent(Intent.ACTION_VIEW, uri)
+            intent.setPackage("com.google.android.apps.maps")
+            itemView.context.startActivity(intent)
+        }
+
+        private fun showConfirmation(title: String, message: String, onConfirm: () -> Unit) {
+            AlertDialog.Builder(itemView.context)
+                .setTitle(title)
+                .setMessage(message)
+                .setPositiveButton("Yes") { _, _ -> onConfirm() }
+                .setNegativeButton("No", null)
+                .show()
+        }
+
+        private fun setupImages(post: Post) {
+            if (post.imageUris.isNotEmpty()) {
+                imageContainer.visibility = View.VISIBLE
+                imageViewPager.adapter = ImagePagerAdapter(post.imageUris)
+            } else {
+                imageContainer.visibility = View.GONE
+            }
+        }
+
+        private fun setupReactions(post: Post) {
+            val total = post.reactionCount.values.sum()
+            reactionsCount.text = if (total > 0) "$total reactions" else ""
+            commentsCount.text = if (post.commentsCount > 0) "${post.commentsCount} comments" else ""
         }
     }
 
-    class ImagePagerAdapter(private val imageUrls: List<String>) :
-        RecyclerView.Adapter<ImagePagerAdapter.ViewHolder>() {
-
-        class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-            val imageView: ImageView = itemView.findViewById(android.R.id.icon)
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-            val imageView = ImageView(parent.context).apply {
-                id = android.R.id.icon
-                layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                scaleType = ImageView.ScaleType.FIT_CENTER
-            }
-            return ViewHolder(imageView)
-        }
-
-        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            Glide.with(holder.imageView).load(imageUrls[position]).into(holder.imageView)
-        }
-
-        override fun getItemCount(): Int = imageUrls.size
+    class ImagePagerAdapter(private val urls: List<String>) : RecyclerView.Adapter<ImagePagerAdapter.ViewHolder>() {
+        class ViewHolder(v: View) : RecyclerView.ViewHolder(v) { val img = v as ImageView }
+        override fun onCreateViewHolder(p: ViewGroup, t: Int) = ViewHolder(ImageView(p.context).apply { 
+            layoutParams = ViewGroup.LayoutParams(-1, -1); scaleType = ImageView.ScaleType.CENTER_CROP 
+        })
+        override fun onBindViewHolder(h: ViewHolder, p: Int) { Glide.with(h.img).load(urls[p]).into(h.img) }
+        override fun getItemCount() = urls.size
     }
 }

@@ -4,6 +4,7 @@ import com.google.firebase.Timestamp
 
 data class SharedRide(
     val datetime: Timestamp? = null,
+    val createdAt: Timestamp? = null, // The time the ride was "posted" or scheduled to be published
     val destination: String? = null,
     val destinationCoordinates: Map<String, Double>? = null,
     val distance: Double? = null,
@@ -13,5 +14,7 @@ data class SharedRide(
     val userUid: String? = null,
     val joinedRiders: Map<String, Map<String, Any>>? = null,
     val sharedRoutesId: String? = null,
-    val status: String? = null
+    val status: String? = null,
+    val isAdminEvent: Boolean = false,
+    val isScheduled: Boolean = false // Added to handle visibility of scheduled admin events
 )

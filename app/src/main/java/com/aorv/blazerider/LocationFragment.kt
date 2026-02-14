@@ -2,8 +2,10 @@ package com.aorv.blazerider
 
 import android.Manifest
 import android.app.Activity
+import android.app.DatePickerDialog
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.TimePickerDialog
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -38,6 +40,9 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
+import androidx.work.Data
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import com.firebase.geofire.GeoFire
 import com.firebase.geofire.GeoLocation
 import com.google.android.gms.location.FusedLocationProviderClient
@@ -74,6 +79,7 @@ import okhttp3.Request
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.IOException
+import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickListener {
@@ -311,6 +317,8 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
                     putExtra("distance", routeDistance); putExtra("eta", routeEta)
                     putExtra("polyline", routePolyline); putExtra("destination", LatLng(selectedPlaceLat, selectedPlaceLng))
                     putExtra("step_polylines", ArrayList(stepPolylines)); putExtra("destination_lat", selectedPlaceLat); putExtra("destination_lng", selectedPlaceLng)
+                    putExtra("user_id", auth.currentUser?.uid) // Pass userId
+                    putExtra("destination_name", selectedPlaceName) // Pass destination name
                 }
                 startActivityForResult(intent, START_ROUTE_ACTIVITY_REQUEST_CODE)
                 selectedPlaceName?.let { logRideToHistory(it) }
@@ -318,33 +326,129 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
         }
 
         view.findViewById<Button>(R.id.nav_share_ride_button).setOnClickListener {
-            val userId = auth.currentUser?.uid ?: return@setOnClickListener
-            if (currentLocation == null || selectedPlaceName == null) return@setOnClickListener
-            CoroutineScope(Dispatchers.Main).launch {
-                try {
-                    val originAddress = reverseGeocodeFallback(currentLocation!!.latitude, currentLocation!!.longitude)
-                    val document = firestore.collection("users").document(userId).get().await()
-                    if (document.exists()) {
-                        val name = "${document.getString("firstName")} ${document.getString("lastName")}".trim()
-                        val routeData = hashMapOf(
-                            "datetime" to FieldValue.serverTimestamp(), "destination" to selectedPlaceName,
-                            "destinationCoordinates" to mapOf("latitude" to selectedPlaceLat, "longitude" to selectedPlaceLng),
-                            "distance" to (routeDistance?.replace(" km", "")?.toDoubleOrNull() ?: 0.0),
-                            "duration" to parseDurationToSeconds(routeDuration!!), "origin" to originAddress,
-                            "originCoordinates" to mapOf("latitude" to currentLocation!!.latitude, "longitude" to currentLocation!!.longitude),
-                            "userName" to name, "userUid" to userId
-                        )
-                        firestore.collection("sharedRoutes").add(routeData).addOnSuccessListener {
-                            Toast.makeText(requireContext(), "Ride shared successfully", Toast.LENGTH_SHORT).show()
-                            startActivity(Intent(requireContext(), SharedRidesActivity::class.java))
-                        }
-                    }
-                } catch (e: Exception) { Log.e("LocationFragment", "Error sharing ride", e) }
-            }
+            showShareRideOptionsDialog()
         }
 
         (childFragmentManager.findFragmentById(R.id.map) as SupportMapFragment).getMapAsync(this)
         if (!hasShownWelcomeDialog) { hasShownWelcomeDialog = true; showWelcomeDialog() }
+    }
+
+    private fun showShareRideOptionsDialog() {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Share Ride")
+            .setMessage("Choose how you want to share this ride.")
+            .setPositiveButton("Share Now") { dialog, _ ->
+                shareRideNow()
+                dialog.dismiss()
+            }
+            .setNegativeButton("Share Later") { dialog, _ ->
+                showScheduleDateTimePicker()
+                dialog.dismiss()
+            }
+            .setNeutralButton("Cancel") { dialog, _ ->
+                dialog.dismiss()
+            }
+            .show()
+    }
+
+    private fun showScheduleDateTimePicker() {
+        val calendar = Calendar.getInstance()
+        DatePickerDialog(requireContext(), { _, year, month, dayOfMonth ->
+            calendar.set(year, month, dayOfMonth)
+            TimePickerDialog(requireContext(), { _, hourOfDay, minute ->
+                calendar.set(Calendar.HOUR_OF_DAY, hourOfDay)
+                calendar.set(Calendar.MINUTE, minute)
+                scheduleRide(calendar.timeInMillis)
+            }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), false).show()
+        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show()
+    }
+
+    private fun shareRideNow() {
+        val userId = auth.currentUser?.uid ?: return
+        if (currentLocation == null || selectedPlaceName == null) return
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                val originAddress = reverseGeocodeFallback(currentLocation!!.latitude, currentLocation!!.longitude)
+                val document = firestore.collection("users").document(userId).get().await()
+                if (document.exists()) {
+                    val name = "${document.getString("firstName")} ${document.getString("lastName")}".trim()
+                    val routeData = hashMapOf(
+                        "datetime" to FieldValue.serverTimestamp(), 
+                        "createdAt" to FieldValue.serverTimestamp(), // Publish immediately
+                        "destination" to selectedPlaceName,
+                        "destinationCoordinates" to mapOf("latitude" to selectedPlaceLat, "longitude" to selectedPlaceLng),
+                        "distance" to (routeDistance?.replace(" km", "")?.toDoubleOrNull() ?: 0.0),
+                        "duration" to parseDurationToSeconds(routeDuration!!), 
+                        "origin" to originAddress,
+                        "originCoordinates" to mapOf("latitude" to currentLocation!!.latitude, "longitude" to currentLocation!!.longitude),
+                        "userName" to name, 
+                        "userUid" to userId,
+                        "isAdminEvent" to false, // This is a user shared ride
+                        "isScheduled" to false // Not scheduled, shared now
+                    )
+                    firestore.collection("sharedRoutes").add(routeData).addOnSuccessListener {
+                        Toast.makeText(requireContext(), "Ride shared successfully", Toast.LENGTH_SHORT).show()
+                        startActivity(Intent(requireContext(), SharedRidesActivity::class.java))
+                    }
+                }
+            } catch (e: Exception) { Log.e("LocationFragment", "Error sharing ride now", e) }
+        }
+    }
+
+    private fun scheduleRide(scheduleTimestamp: Long) {
+        val userId = auth.currentUser?.uid ?: return
+        if (currentLocation == null || selectedPlaceName == null) return
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                val originAddress = reverseGeocodeFallback(currentLocation!!.latitude, currentLocation!!.longitude)
+                val document = firestore.collection("users").document(userId).get().await()
+                if (document.exists()) {
+                    val name = "${document.getString("firstName")} ${document.getString("lastName")}".trim()
+                    
+                    // Create a new document in the 'rides' collection (My Rides)
+                    val myRideRef = firestore.collection("rides").document()
+
+                    val myRideData = hashMapOf(
+                        "rideName" to "Ride to $selectedPlaceName",
+                        "description" to "Scheduled ride to $selectedPlaceName",
+                        "rideTimestamp" to scheduleTimestamp, // The actual ride time
+                        "startLocationName" to originAddress,
+                        "startLocationAddress" to originAddress,
+                        "startLat" to currentLocation!!.latitude,
+                        "startLng" to currentLocation!!.longitude,
+                        "endLocationName" to selectedPlaceName,
+                        "endLocationAddress" to selectedPlaceAddress,
+                        "endLat" to selectedPlaceLat,
+                        "endLng" to selectedPlaceLng,
+                        "hostId" to userId,
+                        "createdAt" to java.util.Date(scheduleTimestamp), // The time it will be published
+                        "distance" to (routeDistance?.replace(" km", "")?.toDoubleOrNull() ?: 0.0),
+                        "duration" to parseDurationToSeconds(routeDuration!!),
+                        "isScheduled" to true, // Mark as scheduled
+                        "originalSharedRouteId" to null // No shared route yet
+                    )
+                    myRideRef.set(myRideData).await()
+                    
+                    // Schedule the WorkManager task to publish the ride to 'sharedRoutes'
+                    val delay = scheduleTimestamp - System.currentTimeMillis()
+                    if (delay > 0) {
+                        val data = Data.Builder()
+                            .putString("rideId", myRideRef.id)
+                            .putString("userId", userId)
+                            .build()
+
+                        val workRequest = OneTimeWorkRequestBuilder<ScheduledRideShareWorker>()
+                            .setInitialDelay(delay, TimeUnit.MILLISECONDS)
+                            .setInputData(data)
+                            .build()
+                        WorkManager.getInstance(requireContext()).enqueue(workRequest)
+                    }
+
+                    Toast.makeText(requireContext(), "Ride scheduled successfully for sharing", Toast.LENGTH_SHORT).show()
+                    // No direct navigation to SharedRidesActivity, as it's not shared yet
+                }
+            } catch (e: Exception) { Log.e("LocationFragment", "Error scheduling ride", e) }
+        }
     }
 
     private suspend fun reverseGeocodeFallback(lat: Double, lng: Double): String {

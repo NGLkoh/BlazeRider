@@ -130,9 +130,13 @@
             android:theme="@style/Theme.Material3.DynamicColors.Light.NoActionBar"
             android:windowSoftInputMode="adjustResize" />
 
+        <activity android:name=".CreateRideActivity"
+            android:theme="@style/Theme.Material3.DynamicColors.Light.NoActionBar"
+            android:windowSoftInputMode="adjustResize" />
+
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyBdsslBjsFC919mvY0osI8hAmrPOzFp_LE"/>
+            android:value="@string/google_maps_key"/>
 
         <provider
             android:name="androidx.core.content.FileProvider"

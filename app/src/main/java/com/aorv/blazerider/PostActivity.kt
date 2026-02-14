@@ -29,6 +29,9 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
+import androidx.work.Data
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.imageview.ShapeableImageView
 import com.google.firebase.auth.FirebaseAuth
@@ -41,6 +44,7 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 import kotlin.math.max
 
 class PostActivity : AppCompatActivity() {
@@ -431,6 +435,9 @@ class PostActivity : AppCompatActivity() {
 
             try {
                 postRef.set(post).await()
+                if (isScheduled) {
+                    scheduleWork(postId, scheduledTimestamp)
+                }
                 updateProgress(100)
                 runOnUiThread {
                     dismissProgressDialog()
@@ -446,6 +453,22 @@ class PostActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun scheduleWork(postId: String, scheduleTimestamp: Long) {
+        val delay = scheduleTimestamp - System.currentTimeMillis()
+        if (delay <= 0) return
+
+        val data = Data.Builder()
+            .putString("postId", postId)
+            .build()
+
+        val workRequest = OneTimeWorkRequestBuilder<ScheduledPostWorker>()
+            .setInitialDelay(delay, TimeUnit.MILLISECONDS)
+            .setInputData(data)
+            .build()
+
+        WorkManager.getInstance(this).enqueue(workRequest)
     }
 
     private inner class ImagePagerAdapter : RecyclerView.Adapter<ImagePagerAdapter.ViewHolder>() {

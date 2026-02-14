@@ -42,6 +42,7 @@
                 android:contentDescription="Live ride indicator" />
 
             <TextView
+                android:id="@+id/live_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="4dp"
@@ -90,7 +91,7 @@
         <LinearLayout
             android:id="@+id/origin_container"
             android:layout_width="match_parent"
-            android:layout_height="24dp"
+            android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:gravity="center_vertical"
             android:orientation="horizontal"
@@ -118,7 +119,7 @@
         <LinearLayout
             android:id="@+id/destination_container"
             android:layout_width="match_parent"
-            android:layout_height="24dp"
+            android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
             android:orientation="horizontal"
             android:gravity="center_vertical"
@@ -146,7 +147,7 @@
         <LinearLayout
             android:id="@+id/distance_container"
             android:layout_width="match_parent"
-            android:layout_height="24dp"
+            android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
             android:orientation="horizontal"
             android:gravity="center_vertical"
@@ -174,7 +175,7 @@
         <LinearLayout
             android:id="@+id/duration_container"
             android:layout_width="match_parent"
-            android:layout_height="24dp"
+            android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
             android:orientation="horizontal"
             android:gravity="center_vertical"

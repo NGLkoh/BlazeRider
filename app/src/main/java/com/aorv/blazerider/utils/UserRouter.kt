@@ -1,0 +1,1 @@
+// Deleting UserRouter.kt to simplify the routing logic for immediate state resolution.

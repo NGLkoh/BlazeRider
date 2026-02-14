@@ -53,10 +53,12 @@
                     android:id="@+id/calendar_view"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    app:mcv_showOtherDates="all"
+                    app:mcv_showOtherDates="none"
                     app:mcv_selectionColor="#E65100"
                     app:mcv_headerTextAppearance="@style/TextAppearance.AppCompat.Medium"
-                    app:mcv_dateTextAppearance="@style/TextAppearance.AppCompat.Small" />
+                    app:mcv_dateTextAppearance="@style/TextAppearance.AppCompat.Small"
+                    app:mcv_tileHeight="41dp"
+                    app:mcv_tileSize="match_parent" />
 
             </androidx.cardview.widget.CardView>
 
@@ -65,6 +67,22 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_create_ride_event"
+                    android:layout_width="match_parent"
+                    android:layout_height="60dp"
+                    android:layout_marginBottom="16dp"
+                    android:backgroundTint="#E65100"
+                    android:text="Create Ride Event"
+                    android:textAllCaps="false"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    app:cornerRadius="12dp"
+                    app:icon="@android:drawable/ic_menu_my_calendar"
+                    app:iconGravity="textStart"
+                    app:iconPadding="8dp"
+                    app:iconTint="@android:color/white" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -127,7 +145,8 @@
                     android:textColor="@android:color/black"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:paddingBottom="8dp" />
+                    android:paddingTop="8dp"
+                    android:paddingBottom="12dp" />
 
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/feed_recycler_view"
