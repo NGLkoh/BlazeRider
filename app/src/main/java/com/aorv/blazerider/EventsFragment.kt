@@ -3,30 +3,37 @@ package com.aorv.blazerider
 import android.app.Activity
 import android.app.TimePickerDialog
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.CalendarView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.bumptech.glide.Glide
+import com.google.android.material.imageview.ShapeableImageView
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.prolificinteractive.materialcalendarview.CalendarDay
+import com.prolificinteractive.materialcalendarview.MaterialCalendarView
 import java.util.Calendar
 import java.util.Date
 
 class EventsFragment : Fragment() {
 
     private lateinit var recyclerView: RecyclerView
-    private lateinit var calendarView: CalendarView
+    private lateinit var calendarView: MaterialCalendarView // Updated Type
     private lateinit var postAdapter: PostAdapter
-    private val db = FirebaseFirestore.getInstance()
+    private lateinit var userProfileImage: ShapeableImageView
 
-    // These hold the range for querying posts to display in the list
+    private val db = FirebaseFirestore.getInstance()
+    private val auth = FirebaseAuth.getInstance()
+
     private var queryStartDate: Date? = null
     private var queryEndDate: Date? = null
 
@@ -35,9 +42,10 @@ class EventsFragment : Fragment() {
 
     private val postLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (it.resultCode == Activity.RESULT_OK) {
-            // When PostActivity is successful, refresh the list
+            // Refresh list AND dots when a new post is made
             if (queryStartDate != null && queryEndDate != null) {
                 fetchPostsForDate(queryStartDate!!, queryEndDate!!)
+                loadEventDots() // Refresh dots
             }
         }
     }
@@ -62,6 +70,7 @@ class EventsFragment : Fragment() {
 
         calendarView = view.findViewById(R.id.calendar_view)
         recyclerView = view.findViewById(R.id.feed_recycler_view)
+        userProfileImage = view.findViewById(R.id.user_image)
 
         // Buttons
         val whatsOnMindButton = view.findViewById<View>(R.id.btn_whats_on_mind)
@@ -76,42 +85,54 @@ class EventsFragment : Fragment() {
                 }
                 commentsActivityLauncher.launch(intent)
             },
-            isAnnouncement = false // This is NOT the announcement screen, so show badges
+            isAnnouncement = false
         )
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
         recyclerView.adapter = postAdapter
 
-        // 1. CALENDAR SELECTION LOGIC
-        calendarView.setOnDateChangeListener { _, year, month, dayOfMonth ->
-            val calendar = Calendar.getInstance()
+        loadUserProfile()
 
-            // Set the selected date
-            calendar.set(year, month, dayOfMonth)
-            currentSelectedTimestamp = calendar.timeInMillis
+        // --- LOAD DOTS FOR EVENTS ---
+        loadEventDots()
 
-            // Update the list to show events for this day
-            calendar.set(year, month, dayOfMonth, 0, 0, 0)
-            calendar.set(Calendar.MILLISECOND, 0)
-            queryStartDate = calendar.time
+        // 1. CALENDAR SELECTION LOGIC (Updated for MaterialCalendarView)
+        calendarView.setOnDateChangedListener { _, date, selected ->
+            if (selected) {
+                val calendar = Calendar.getInstance()
+                calendar.set(date.year, date.month - 1, date.day) // Month is 1-based in library, 0-based in Java Calendar
 
-            calendar.set(year, month, dayOfMonth, 23, 59, 59)
-            queryEndDate = calendar.time
+                currentSelectedTimestamp = calendar.timeInMillis
 
-            fetchPostsForDate(queryStartDate!!, queryEndDate!!)
+                // Set query range for the selected day
+                calendar.set(Calendar.HOUR_OF_DAY, 0)
+                calendar.set(Calendar.MINUTE, 0)
+                calendar.set(Calendar.SECOND, 0)
+                calendar.set(Calendar.MILLISECOND, 0)
+                queryStartDate = calendar.time
+
+                calendar.set(Calendar.HOUR_OF_DAY, 23)
+                calendar.set(Calendar.MINUTE, 59)
+                calendar.set(Calendar.SECOND, 59)
+                queryEndDate = calendar.time
+
+                fetchPostsForDate(queryStartDate!!, queryEndDate!!)
+            }
         }
+
+        // Select today by default visually
+        calendarView.setDateSelected(CalendarDay.today(), true)
 
         // 2. NORMAL POST BUTTONS (Post Now)
         val openPostNow = View.OnClickListener {
             val intent = Intent(requireContext(), PostActivity::class.java).apply {
                 putExtra("admin", true)
-                putExtra("SCHEDULED_DATE", 0L) // 0 means "Post Immediately"
+                putExtra("SCHEDULED_DATE", 0L)
             }
             postLauncher.launch(intent)
         }
 
         whatsOnMindButton.setOnClickListener(openPostNow)
         addImageButton.setOnClickListener(openPostNow)
-
 
         // 3. SCHEDULE BUTTON (Manual Time Picker)
         scheduleEventButton.setOnClickListener {
@@ -136,18 +157,70 @@ class EventsFragment : Fragment() {
                 },
                 currentHour,
                 currentMinute,
-                false // set to true for 24 hour mode, false for AM/PM
+                false
             )
             timePickerDialog.show()
         }
 
-        // Load today's posts by default on startup
         loadTodaysPosts()
+    }
+
+    // --- NEW: Fetch all event dates to show dots ---
+    private fun loadEventDots() {
+        db.collection("posts")
+            .whereEqualTo("admin", true) // Only show dots for admin events
+            .get()
+            .addOnSuccessListener { result ->
+                val eventDates = HashSet<CalendarDay>()
+
+                for (document in result) {
+                    val timestamp = document.getTimestamp("createdAt")
+                    if (timestamp != null) {
+                        val date = timestamp.toDate()
+                        val calendar = Calendar.getInstance()
+                        calendar.time = date
+
+                        // Convert to CalendarDay for the library
+                        val day = CalendarDay.from(
+                            calendar.get(Calendar.YEAR),
+                            calendar.get(Calendar.MONTH) + 1, // Library uses 1-12 for months
+                            calendar.get(Calendar.DAY_OF_MONTH)
+                        )
+                        eventDates.add(day)
+                    }
+                }
+
+                // Apply the Red Dot Decorator
+                // Color.RED or pass your custom color resource
+                calendarView.addDecorator(EventDecorator(Color.parseColor("#E65100"), eventDates))
+            }
+            .addOnFailureListener {
+                Log.e("EventsFragment", "Error loading event dots", it)
+            }
+    }
+
+    private fun loadUserProfile() {
+        val user = auth.currentUser
+        if (user != null) {
+            db.collection("users").document(user.uid).get()
+                .addOnSuccessListener { document ->
+                    if (document.exists()) {
+                        val profileImageUrl = document.getString("profileImageUrl")
+                        if (context != null) {
+                            Glide.with(this)
+                                .load(profileImageUrl)
+                                .placeholder(R.drawable.ic_anonymous)
+                                .error(R.drawable.ic_anonymous)
+                                .into(userProfileImage)
+                        }
+                    }
+                }
+        }
     }
 
     private fun loadTodaysPosts() {
         val calendar = Calendar.getInstance()
-        currentSelectedTimestamp = calendar.timeInMillis // Default to "Now"
+        currentSelectedTimestamp = calendar.timeInMillis
 
         val todayStart = calendar.apply {
             set(Calendar.HOUR_OF_DAY, 0)
@@ -177,7 +250,6 @@ class EventsFragment : Fragment() {
             .get()
             .addOnSuccessListener { result ->
                 if (!isAdded) return@addOnSuccessListener
-
                 val fetchedPosts = result.documents.mapNotNull { document ->
                     try {
                         Post(
@@ -189,35 +261,26 @@ class EventsFragment : Fragment() {
                             reactionCount = document.get("reactionCount") as? Map<String, Long> ?: emptyMap(),
                             commentsCount = document.getLong("commentsCount") ?: 0L,
                             admin = document.getBoolean("admin") ?: false,
-                            isScheduled = document.getBoolean("isScheduled") ?: false // ✅ FIXED: Added missing parsing
+                            isScheduled = document.getBoolean("isScheduled") ?: false
                         )
                     } catch (e: Exception) {
-                        Log.e("EventsFragment", "Error parsing post ${document.id}", e)
                         null
                     }
                 }
                 postAdapter.submitPosts(fetchedPosts)
             }
-            .addOnFailureListener { e ->
-                if (!isAdded) return@addOnFailureListener
-                Toast.makeText(requireContext(), "Error fetching events: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
     }
 
     private fun deletePost(post: Post) {
-        // ✅ FIXED: Removed loose code that was causing syntax errors
         db.collection("posts").document(post.id)
             .delete()
             .addOnSuccessListener {
                 if (!isAdded) return@addOnSuccessListener
-                Toast.makeText(requireContext(), "Event deleted successfully", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), "Event deleted", Toast.LENGTH_SHORT).show()
                 if (queryStartDate != null && queryEndDate != null) {
                     fetchPostsForDate(queryStartDate!!, queryEndDate!!)
+                    loadEventDots() // Refresh dots after delete
                 }
-            }
-            .addOnFailureListener { e ->
-                if (!isAdded) return@addOnFailureListener
-                Toast.makeText(requireContext(), "Error deleting event: ${e.message}", Toast.LENGTH_SHORT).show()
             }
     }
 }

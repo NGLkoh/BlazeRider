@@ -52,6 +52,7 @@
             android:isScrollContainer="true"
 
             />
+        <activity android:name=".AccountDeactivatedActivity" />
         <activity android:name=".EmailVerificationActivity" />
 
         <activity android:name=".CurrentAddressActivity" />

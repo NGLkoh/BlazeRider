@@ -21,7 +21,12 @@ data class UserRequest(
     var location: Any? = null, // Using Any? for geopoint
     var isVerified: Boolean = false,
     var isAdmin: Boolean = false,
-    var isVerifiedRecent: Boolean = false
+    var isVerifiedRecent: Boolean = false,
+
+    // --- NEW FIELDS ADDED HERE ---
+    var deactivated: Boolean = false,
+    var deactivationReason: String? = null
+
 ) {
     // Default constructor required for Firestore
     constructor() : this(
@@ -43,6 +48,10 @@ data class UserRequest(
         location = null,
         isVerified = false,
         isAdmin = false,
-        isVerifiedRecent = false
+        isVerifiedRecent = false,
+
+        // Initialize new fields
+        deactivated = false,
+        deactivationReason = null
     )
 }

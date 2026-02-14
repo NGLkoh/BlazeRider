@@ -8,14 +8,14 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
-import com.google.firebase.firestore.FirebaseFirestore
 
 class UserAdapter(
-    private var userList: MutableList<UserRequest>,
+    private var userList: List<UserRequest>,
     private val context: Context,
-    private var showPending: Boolean,
+    private var currentTab: Int, // 0 = Pending, 1 = Accepted, 2 = Deleted
     private val onConfirmClick: (UserRequest) -> Unit,
-    private val onRejectClick: (UserRequest) -> Unit
+    private val onDeactivateClick: (UserRequest) -> Unit, // Renamed for clarity (handles reject/remove)
+    private val onReactivateClick: (UserRequest) -> Unit // New callback for reactivating
 ) : RecyclerView.Adapter<UserAdapter.UserViewHolder>() {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): UserViewHolder {
@@ -26,58 +26,96 @@ class UserAdapter(
     override fun onBindViewHolder(holder: UserViewHolder, position: Int) {
         val user = userList[position]
 
-        // Set user details
+        // --- Set User Details ---
         holder.tvName.text = "${user.firstName.orEmpty()} ${user.lastName.orEmpty()}"
         holder.tvEmail.text = user.email.orEmpty()
-        holder.tvDetails.text = "Gender: ${when {
+
+        // Gender Display
+        val genderSymbol = when {
             user.gender?.equals("Male", ignoreCase = true) == true -> "♂️"
             user.gender?.equals("Female", ignoreCase = true) == true -> "♀️"
             else -> "N/A"
-        }}"
-        holder.tvStatus.text = "Verified: ${if (user.isVerified) "✅" else "❌"}"
-
-        // Update button state based on verification status and showPending
-        holder.btnConfirm.apply {
-            isEnabled = !user.isVerified && showPending
-            text = if (user.isVerified) "Confirmed" else "Confirm"
-            visibility = if (user.isVerified && !showPending) View.GONE else View.VISIBLE
         }
-        
-        holder.btnReject.apply {
-            visibility = if (showPending && !user.isVerified) View.VISIBLE else View.GONE
+        holder.tvDetails.text = "Gender: $genderSymbol"
+
+        // Status Display
+        holder.tvStatus.text = when {
+            user.deactivated -> "Status: Deactivated 🚫"
+            user.isVerified -> "Status: Verified ✅"
+            else -> "Status: Pending ⏳"
         }
 
-        // Handle confirm button click
-        holder.btnConfirm.setOnClickListener {
-            AlertDialog.Builder(holder.itemView.context)
-                .setTitle("Confirm Verification")
-                .setMessage("Are you sure you want to verify this user?")
-                .setPositiveButton("Yes") { _, _ ->
-                    onConfirmClick(user)
+        // --- Reason Display (Only for Deleted Tab) ---
+        if (currentTab == 2) {
+            holder.tvReason.visibility = View.VISIBLE
+            holder.tvReason.text = "Reason: ${user.deactivationReason ?: "No reason provided"}"
+        } else {
+            holder.tvReason.visibility = View.GONE
+        }
+
+        // --- Button Visibility & Logic based on Tab ---
+        when (currentTab) {
+            0 -> { // PENDING TAB
+                holder.btnConfirm.visibility = View.VISIBLE
+                holder.btnConfirm.text = "Confirm"
+                holder.btnConfirm.setOnClickListener {
+                    showConfirmationDialog(holder.itemView.context, "Confirm Verification", "Are you sure you want to verify this user?") {
+                        onConfirmClick(user)
+                    }
                 }
-                .setNegativeButton("No") { dialog, _ -> dialog.dismiss() }
-                .show()
-        }
 
-        // Handle reject button click
-        holder.btnReject.setOnClickListener {
-            AlertDialog.Builder(holder.itemView.context)
-                .setTitle("Reject User")
-                .setMessage("Are you sure you want to reject and remove this user from the database? This action cannot be undone.")
-                .setPositiveButton("Reject") { _, _ ->
-                    onRejectClick(user)
+                holder.btnReject.visibility = View.VISIBLE
+                holder.btnReject.text = "Reject"
+                holder.btnReject.setOnClickListener {
+                    // Use onDeactivateClick to trigger the reason dialog logic in Fragment
+                    onDeactivateClick(user)
                 }
-                .setNegativeButton("Cancel") { dialog, _ -> dialog.dismiss() }
-                .show()
+
+                holder.btnReactivate.visibility = View.GONE
+            }
+            1 -> { // ACCEPTED TAB
+                holder.btnConfirm.visibility = View.GONE // Already confirmed
+
+                holder.btnReject.visibility = View.VISIBLE
+                holder.btnReject.text = "Remove" // Change text to "Remove" for accepted users
+                holder.btnReject.setOnClickListener {
+                    onDeactivateClick(user)
+                }
+
+                holder.btnReactivate.visibility = View.GONE
+            }
+            2 -> { // DELETED TAB
+                holder.btnConfirm.visibility = View.GONE
+                holder.btnReject.visibility = View.GONE
+
+                holder.btnReactivate.visibility = View.VISIBLE
+                holder.btnReactivate.text = "Reactivate"
+                holder.btnReactivate.setOnClickListener {
+                    showConfirmationDialog(holder.itemView.context, "Reactivate User", "Are you sure you want to reactivate this user account?") {
+                        onReactivateClick(user)
+                    }
+                }
+            }
         }
     }
 
     override fun getItemCount(): Int = userList.size
 
-    fun updateList(newList: List<UserRequest>, showPending: Boolean) {
-        userList = newList.toMutableList()
-        this.showPending = showPending
+    // Update list and tab state
+    fun updateList(newList: List<UserRequest>, currentTab: Int) {
+        this.userList = newList
+        this.currentTab = currentTab
         notifyDataSetChanged()
+    }
+
+    // Helper for simple confirmation dialogs
+    private fun showConfirmationDialog(context: Context, title: String, message: String, onConfirm: () -> Unit) {
+        AlertDialog.Builder(context)
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton("Yes") { _, _ -> onConfirm() }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     class UserViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
@@ -85,7 +123,10 @@ class UserAdapter(
         val tvEmail: TextView = itemView.findViewById(R.id.tvEmail)
         val tvDetails: TextView = itemView.findViewById(R.id.tvDetails)
         val tvStatus: TextView = itemView.findViewById(R.id.tvStatus)
+        val tvReason: TextView = itemView.findViewById(R.id.tvReason) // Ensure this ID exists in item_user.xml
+
         val btnConfirm: Button = itemView.findViewById(R.id.btnConfirm)
-        val btnReject: Button = itemView.findViewById(R.id.btnReject)
+        val btnReject: Button = itemView.findViewById(R.id.btnReject) // Used for Reject AND Remove
+        val btnReactivate: Button = itemView.findViewById(R.id.btnReactivate) // Ensure this ID exists in item_user.xml
     }
 }

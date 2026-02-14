@@ -30,76 +30,112 @@
             android:textSize="24sp"
             android:textStyle="bold" />
 
-        <LinearLayout
-            android:id="@+id/toggleButtonsLayout"
-            android:layout_width="wrap_content"
-            android:layout_height="39dp"
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
             android:layout_below="@id/tvTitle"
             android:layout_marginTop="12dp"
-            android:layout_alignParentStart="true"
-            android:background="@drawable/toggle_background"
-            android:orientation="horizontal"
-            android:padding="1dp">
+            android:scrollbars="none">
 
-            <FrameLayout
+            <LinearLayout
+                android:id="@+id/toggleButtonsLayout"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="4dp">
+                android:layout_height="39dp"
+                android:background="@drawable/toggle_background"
+                android:orientation="horizontal"
+                android:padding="1dp">
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnPending"
-                    android:layout_width="match_parent"
-                    android:layout_height="38dp"
-                    android:background="@drawable/toggle_button_selector"
-                    android:paddingStart="12dp"
-                    android:paddingEnd="12dp"
-                    android:text="Pending"
-                    android:textColor="@android:color/white"
-                    android:textSize="12sp" />
+                <FrameLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="4dp">
 
-                <TextView
-                    android:id="@+id/pendingBadge"
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:layout_gravity="top|end"
-                    android:layout_marginTop="4dp"
-                    android:layout_marginEnd="4dp"
-                    android:background="@drawable/badge_background"
-                    android:gravity="center"
-                    android:textColor="@android:color/white"
-                    android:textSize="12sp"
-                    android:visibility="gone" />
-            </FrameLayout>
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPending"
+                        android:layout_width="wrap_content"
+                        android:layout_height="38dp"
+                        android:background="@drawable/toggle_button_selector"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
+                        android:text="Pending"
+                        android:textColor="@android:color/white"
+                        android:textSize="12sp" />
 
-            <FrameLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content">
+                    <TextView
+                        android:id="@+id/pendingBadge"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="top|end"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginEnd="4dp"
+                        android:background="@drawable/badge_background"
+                        android:gravity="center"
+                        android:textColor="@android:color/white"
+                        android:textSize="12sp"
+                        android:visibility="gone" />
+                </FrameLayout>
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnAccepted"
-                    android:layout_width="78dp"
-                    android:layout_height="36dp"
-                    android:background="@drawable/toggle_button_selector"
-                    android:paddingStart="12dp"
-                    android:paddingEnd="12dp"
-                    android:text="Accepted"
-                    android:textColor="@android:color/white"
-                    android:textSize="12sp" />
+                <FrameLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="4dp">
 
-                <TextView
-                    android:id="@+id/acceptedBadge"
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:layout_gravity="top|end"
-                    android:layout_marginTop="4dp"
-                    android:layout_marginEnd="4dp"
-                    android:background="@drawable/badge_background"
-                    android:gravity="center"
-                    android:textColor="@android:color/white"
-                    android:textSize="12sp"
-                    android:visibility="gone" />
-            </FrameLayout>
-        </LinearLayout>
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnAccepted"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:background="@drawable/toggle_button_selector"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
+                        android:text="Accepted"
+                        android:textColor="@android:color/white"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:id="@+id/acceptedBadge"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="top|end"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginEnd="4dp"
+                        android:background="@drawable/badge_background"
+                        android:gravity="center"
+                        android:textColor="@android:color/white"
+                        android:textSize="12sp"
+                        android:visibility="gone" />
+                </FrameLayout>
+
+                <FrameLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnDeleted"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:background="@drawable/toggle_button_selector"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
+                        android:text="Deleted"
+                        android:textColor="@android:color/white"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:id="@+id/deletedBadge"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="top|end"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginEnd="4dp"
+                        android:background="@drawable/badge_background"
+                        android:gravity="center"
+                        android:textColor="@android:color/white"
+                        android:textSize="12sp"
+                        android:visibility="gone" />
+                </FrameLayout>
+
+            </LinearLayout>
+        </HorizontalScrollView>
 
     </RelativeLayout>
 
@@ -130,7 +166,7 @@
             android:id="@+id/noRequestsText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="No users on the list"
+            android:text="No users found"
             android:textSize="18sp"
             android:textColor="@android:color/black"
             android:visibility="gone"

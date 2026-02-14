@@ -101,7 +101,7 @@ class SignInActivity : AppCompatActivity() {
      * Logic to determine if the user goes to Admin, Home, or Onboarding
      */
     private fun handleUserRouting(uid: String) {
-        // Special handling for the hardcoded admin user ID
+        // Special handling for the hardcoded admin user ID (Bypasses deactivation check)
         if (uid == "A7USXq3qwFgCH4sov6mmPdtaGOn2") {
             navigateTo(AdminActivity::class.java)
             return
@@ -110,9 +110,23 @@ class SignInActivity : AppCompatActivity() {
         db.collection("users").document(uid).get()
             .addOnSuccessListener { document ->
                 if (document.exists()) {
+                    // 1. CHECK FOR DEACTIVATION FIRST
+                    val isDeactivated = document.getBoolean("deactivated") ?: false
+
+                    if (isDeactivated) {
+                        // Redirect to the Deactivated Screen
+                        val intent = Intent(this, AccountDeactivatedActivity::class.java)
+                        startActivity(intent)
+                        overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
+                        finish()
+                        return@addOnSuccessListener
+                    }
+
+                    // 2. CONTINUE WITH EXISTING LOGIC
                     val verified = document.getBoolean("verified") ?: false
                     val stepCompleted = document.getLong("stepCompleted")?.toInt() ?: 1
 
+                    // Handle admin check (supporting boolean, string, or long)
                     val isAdmin = when (val adminValue = document.get("admin")) {
                         is Boolean -> adminValue
                         is String -> adminValue.toBooleanStrictOrNull() ?: false
@@ -143,7 +157,6 @@ class SignInActivity : AppCompatActivity() {
                 Toast.makeText(this, "Error fetching profile: ${e.message}", Toast.LENGTH_SHORT).show()
             }
     }
-
     private fun navigateTo(cls: Class<*>) {
         val intent = Intent(this, cls)
         startActivity(intent)
