@@ -36,7 +36,7 @@
             app:layout_constraintTop_toTopOf="@id/post_profile_pic"
             app:layout_constraintBottom_toBottomOf="@id/post_profile_pic"
             app:layout_constraintStart_toEndOf="@id/post_profile_pic"
-            app:layout_constraintEnd_toStartOf="@+id/btn_delete_post">
+            app:layout_constraintEnd_toStartOf="@+id/post_options_icon">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -88,17 +88,16 @@
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
-        <ImageButton
-            android:id="@+id/btn_delete_post"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:layout_marginTop="0dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_menu_delete"
-            app:tint="#D32F2F"
+        <ImageView
+            android:id="@+id/btn_view_joined_riders"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginEnd="8dp"
+            android:src="@drawable/ic_info"
             android:visibility="gone"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
+            app:layout_constraintEnd_toStartOf="@id/post_options_icon"
+            app:tint="@color/dark_gray" />
 
         <LinearLayout
             android:id="@+id/scheduled_badge_container"

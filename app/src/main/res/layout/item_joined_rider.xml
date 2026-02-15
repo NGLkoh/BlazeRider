@@ -6,13 +6,12 @@
     android:orientation="horizontal"
     android:padding="12dp"
     android:gravity="center_vertical"
-    android:background="@drawable/rounded_border_background"
-    android:layout_marginBottom="8dp">
+    android:background="?attr/selectableItemBackground">
 
     <com.google.android.material.imageview.ShapeableImageView
-        android:id="@+id/admin_profile_pic"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
+        android:id="@+id/rider_profile_pic"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
         android:scaleType="centerCrop"
         android:src="@drawable/ic_anonymous"
         app:shapeAppearanceOverlay="@style/RoundedImage" />
@@ -21,34 +20,25 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:layout_marginStart="12dp"
+        android:layout_marginStart="16dp"
         android:orientation="vertical">
 
         <TextView
-            android:id="@+id/admin_full_name"
+            android:id="@+id/rider_full_name"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Admin Name"
-            android:textSize="14sp"
+            android:text="Rider Name"
+            android:textSize="16sp"
             android:textStyle="bold"
             android:textColor="@color/black" />
 
         <TextView
-            android:id="@+id/admin_email"
+            android:id="@+id/rider_email"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Email Address"
-            android:textSize="12sp"
+            android:textSize="14sp"
             android:textColor="@color/dark_gray" />
     </LinearLayout>
-
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btn_remove_admin"
-        style="@style/Widget.MaterialComponents.Button.TextButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Remove"
-        android:textColor="@color/quit"
-        android:textSize="12sp" />
 
 </LinearLayout>

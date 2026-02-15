@@ -5,15 +5,22 @@ import android.graphics.Color
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
 import android.widget.Button
 import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.bumptech.glide.Glide
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.imageview.ShapeableImageView
 import com.google.android.material.textfield.TextInputLayout
 import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 
@@ -21,6 +28,9 @@ class AddAdminActivity : AppCompatActivity() {
 
     private lateinit var db: FirebaseFirestore
     private lateinit var mainAuth: FirebaseAuth
+    private lateinit var adminRecyclerView: RecyclerView
+    private lateinit var adminAdapter: AdminAdapter
+    private val adminList = mutableListOf<Map<String, Any>>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,6 +44,7 @@ class AddAdminActivity : AppCompatActivity() {
         val confirmPasswordEditText = findViewById<TextInputEditText>(R.id.confirmPassword)
         val confirmLayout = findViewById<TextInputLayout>(R.id.confirmPasswordLayout)
         val btnAddAdmin = findViewById<Button>(R.id.btnAddAdmin)
+        adminRecyclerView = findViewById(R.id.adminRecyclerView)
 
         // Checklist TextViews
         val checkLength = findViewById<TextView>(R.id.check_length)
@@ -42,6 +53,14 @@ class AddAdminActivity : AppCompatActivity() {
         val checkNumber = findViewById<TextView>(R.id.check_number)
 
         findViewById<ImageButton>(R.id.backButton).setOnClickListener { finish() }
+
+        // Setup RecyclerView
+        adminRecyclerView.layoutManager = LinearLayoutManager(this)
+        adminAdapter = AdminAdapter()
+        adminRecyclerView.adapter = adminAdapter
+
+        // Fetch Admins
+        fetchAdmins()
 
         // Real-time Password Validation
         passwordEditText.addTextChangedListener(object : TextWatcher {
@@ -62,13 +81,11 @@ class AddAdminActivity : AppCompatActivity() {
             val password = passwordEditText.text.toString().trim()
             val confirm = confirmPasswordEditText.text.toString().trim()
 
-            // 1. Basic empty check
             if (email.isEmpty() || password.isEmpty()) {
                 Toast.makeText(this, "Please fill all fields", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            // 2. Complexity check (Must meet all requirements)
             val isValid = password.length >= 8 && password.any { it.isUpperCase() } &&
                     password.any { it.isLowerCase() } && password.any { it.isDigit() }
 
@@ -77,7 +94,6 @@ class AddAdminActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            // 3. Match check
             if (password != confirm) {
                 confirmLayout.error = "Passwords do not match"
                 return@setOnClickListener
@@ -90,6 +106,7 @@ class AddAdminActivity : AppCompatActivity() {
                 .addOnSuccessListener { result ->
                     val uid = result.user?.uid ?: return@addOnSuccessListener
                     val adminData = mapOf(
+                        "uid" to uid,
                         "email" to email,
                         "admin" to true,
                         "firstName" to "Admin",
@@ -100,16 +117,60 @@ class AddAdminActivity : AppCompatActivity() {
                     )
                     db.collection("users").document(uid).set(adminData)
                         .addOnSuccessListener {
-                            val intent = Intent(this, AdminActivity::class.java)
-                            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                            startActivity(intent)
-                            finish()
+                            Toast.makeText(this, "Admin account created successfully", Toast.LENGTH_SHORT).show()
+                            emailEditText.text = null
+                            passwordEditText.text = null
+                            confirmPasswordEditText.text = null
                         }
                 }
                 .addOnFailureListener { e ->
                     Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
         }
+    }
+
+    private fun fetchAdmins() {
+        db.collection("users")
+            .whereEqualTo("admin", true)
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) {
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    adminList.clear()
+                    for (doc in snapshot.documents) {
+                        val data = doc.data?.toMutableMap()
+                        if (data != null) {
+                            data["uid"] = doc.id
+                            adminList.add(data)
+                        }
+                    }
+                    adminAdapter.submitList(adminList)
+                }
+            }
+    }
+
+    private fun removeAdmin(adminUid: String, adminName: String) {
+        if (adminUid == mainAuth.currentUser?.uid) {
+            Toast.makeText(this, "You cannot remove yourself", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Remove Admin")
+            .setMessage("Are you sure you want to remove $adminName from the administrators? They will no longer have admin access.")
+            .setPositiveButton("Remove") { _, _ ->
+                db.collection("users").document(adminUid)
+                    .update("admin", false)
+                    .addOnSuccessListener {
+                        Toast.makeText(this, "Admin access removed", Toast.LENGTH_SHORT).show()
+                    }
+                    .addOnFailureListener { e ->
+                        Toast.makeText(this, "Failed to remove admin: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun updateCheck(textView: TextView, isValid: Boolean, label: String) {
@@ -119,6 +180,50 @@ class AddAdminActivity : AppCompatActivity() {
         } else {
             textView.text = "✕ $label"
             textView.setTextColor(Color.parseColor("#D32F2F")) // Red
+        }
+    }
+
+    inner class AdminAdapter : RecyclerView.Adapter<AdminAdapter.ViewHolder>() {
+        private var items = listOf<Map<String, Any>>()
+
+        fun submitList(newList: List<Map<String, Any>>) {
+            items = newList.toList()
+            notifyDataSetChanged()
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+            val view = LayoutInflater.from(parent.context).inflate(R.layout.item_admin, parent, false)
+            return ViewHolder(view)
+        }
+
+        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+            val admin = items[position]
+            val firstName = admin["firstName"] as? String ?: ""
+            val lastName = admin["lastName"] as? String ?: ""
+            val fullName = "$firstName $lastName"
+            val uid = admin["uid"] as? String ?: ""
+            
+            holder.name.text = fullName
+            holder.email.text = admin["email"] as? String ?: ""
+            
+            val profileUrl = admin["profileImageUrl"] as? String
+            Glide.with(holder.itemView.context)
+                .load(profileUrl)
+                .placeholder(R.drawable.ic_anonymous)
+                .into(holder.pic)
+
+            holder.removeBtn.setOnClickListener {
+                removeAdmin(uid, fullName)
+            }
+        }
+
+        override fun getItemCount() = items.size
+
+        inner class ViewHolder(v: View) : RecyclerView.ViewHolder(v) {
+            val pic = v.findViewById<ShapeableImageView>(R.id.admin_profile_pic)
+            val name = v.findViewById<TextView>(R.id.admin_full_name)
+            val email = v.findViewById<TextView>(R.id.admin_email)
+            val removeBtn = v.findViewById<View>(R.id.btn_remove_admin)
         }
     }
 }

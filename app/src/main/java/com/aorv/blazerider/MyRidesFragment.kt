@@ -1,6 +1,8 @@
 package com.aorv.blazerider
 
 import android.content.Intent
+import android.location.Address
+import android.location.Geocoder
 import android.location.Location
 import android.net.Uri
 import android.os.Bundle
@@ -190,14 +192,27 @@ class MyRidesFragment : Fragment() {
                 binding.dateCreated.text = ride.datetime?.toDate()?.let {
                     SimpleDateFormat("d MMMM yyyy 'at' HH:mm:ss", Locale.getDefault()).format(it)
                 } ?: "Unknown"
-                binding.origin.text = "Origin: ${ride.origin}"
+
+                val rawOrigin = ride.origin ?: "Unknown"
+                if (rawOrigin.equals("Current Location", ignoreCase = true)) {
+                    val lat = ride.originCoordinates?.get("latitude") as? Double
+                    val lng = ride.originCoordinates?.get("longitude") as? Double
+                    val cleanAddress = getAddressFromCoords(lat, lng)
+                    binding.origin.text = "Origin: ${cleanAddress ?: rawOrigin}"
+                } else {
+                    binding.origin.text = "Origin: $rawOrigin"
+                }
+
                 binding.destination.text = "Destination: ${ride.destination}"
                 binding.distance.text = "Distance: ${ride.distance?.let { String.format("%.2f km", it) } ?: "Unknown"}"
                 binding.duration.text = "Duration: ${formatDuration(ride.duration)}"
 
                 val ridersCount = ride.joinedRiders?.size ?: 0
                 binding.rideNumbers.text = if (ride.isScheduled && ride.status == "scheduled") {
-                    "Scheduled"
+                    val timeString = ride.datetime?.toDate()?.let {
+                        SimpleDateFormat("HH:mm", Locale.getDefault()).format(it)
+                    } ?: ""
+                    "Scheduled for $timeString"
                 } else {
                     "$ridersCount ${if (ridersCount <= 1) "rider" else "riders"} joined"
                 }
@@ -207,6 +222,16 @@ class MyRidesFragment : Fragment() {
 
                 val isRideCreator = ride.userUid == userId
                 
+                // Show view riders button for creator if there are joined riders
+                if (isRideCreator && ridersCount > 0) {
+                    binding.viewRidersBtn.visibility = View.VISIBLE
+                    binding.viewRidersBtn.setOnClickListener {
+                        showJoinedRidersDialog(ride)
+                    }
+                } else {
+                    binding.viewRidersBtn.visibility = View.GONE
+                }
+
                 if (ride.isScheduled && ride.status == "scheduled") {
                     binding.startRouteBtn.visibility = View.GONE
                     binding.arrivedBtn.visibility = View.GONE
@@ -278,6 +303,56 @@ class MyRidesFragment : Fragment() {
 
                 binding.cancelRideBtn.setOnClickListener {
                     showCancelConfirmationDialog(ride)
+                }
+            }
+
+            private fun showJoinedRidersDialog(ride: SharedRide) {
+                val ridersList = ride.joinedRiders?.keys?.toList() ?: emptyList()
+                if (ridersList.isEmpty()) return
+
+                val riderNames = mutableListOf<String>()
+                var loadedCount = 0
+
+                ridersList.forEach { riderId ->
+                    firestore.collection("users").document(riderId).get()
+                        .addOnSuccessListener { doc ->
+                            val firstName = doc.getString("firstName") ?: ""
+                            val lastName = doc.getString("lastName") ?: ""
+                            riderNames.add("$firstName $lastName")
+                            loadedCount++
+
+                            if (loadedCount == ridersList.size) {
+                                MaterialAlertDialogBuilder(requireContext())
+                                    .setTitle("Joined Riders")
+                                    .setItems(riderNames.toTypedArray(), null)
+                                    .setPositiveButton("Close", null)
+                                    .show()
+                            }
+                        }
+                }
+            }
+
+            private fun getAddressFromCoords(lat: Double?, lng: Double?): String? {
+                if (lat == null || lng == null) return null
+                return try {
+                    val geocoder = Geocoder(requireContext(), Locale.getDefault())
+                    val addresses: List<Address>? = geocoder.getFromLocation(lat, lng, 1)
+                    if (!addresses.isNullOrEmpty()) {
+                        val address = addresses[0]
+                        val street = address.thoroughfare
+                        val city = address.locality
+                        val subLocality = address.subLocality
+
+                        when {
+                            street != null && city != null -> "$street, $city"
+                            street != null -> street
+                            subLocality != null && city != null -> "$subLocality, $city"
+                            else -> city ?: address.subAdminArea ?: "Unknown Location"
+                        }
+                    } else null
+                } catch (e: Exception) {
+                    Log.e(TAG, "Geocoding failed: ${e.message}")
+                    null
                 }
             }
 

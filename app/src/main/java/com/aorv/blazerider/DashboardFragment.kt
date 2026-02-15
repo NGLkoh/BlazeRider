@@ -8,7 +8,6 @@ import android.view.ViewGroup
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.TextView
-import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import com.github.mikephil.charting.charts.LineChart
@@ -19,6 +18,7 @@ import com.github.mikephil.charting.formatter.ValueFormatter
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -32,6 +32,7 @@ class DashboardFragment : Fragment() {
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
     private var allVerifiedUsers: List<DocumentSnapshot> = emptyList()
+    private var usersListener: ListenerRegistration? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -55,8 +56,8 @@ class DashboardFragment : Fragment() {
         setCurrentDate()
         fetchAdminName()
 
-        // Fetch User Data for Chart
-        fetchAllVerifiedUsers()
+        // Fetch User Data for Chart with real-time updates
+        startUsersListener()
 
         // Handle Segmented Control (Day, Week, Month, Year)
         segmentedControl.setOnCheckedChangeListener { _, checkedId ->
@@ -103,17 +104,36 @@ class DashboardFragment : Fragment() {
         }
     }
 
-    private fun fetchAllVerifiedUsers() {
-        db.collection("users").whereEqualTo("verified", true).get()
-            .addOnSuccessListener { snapshot ->
-                if (!isAdded || snapshot == null) return@addOnSuccessListener
-                allVerifiedUsers = snapshot.documents.filter { doc -> !(doc.getBoolean("admin") ?: false) }
+    private fun startUsersListener() {
+        // Use addSnapshotListener for real-time updates when users are added or deactivated
+        usersListener = db.collection("users")
+            .whereEqualTo("verified", true)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("DashboardFragment", "Error listening for users: ", error)
+                    return@addSnapshotListener
+                }
+                if (!isAdded || snapshot == null) return@addSnapshotListener
+
+                // Filter out admins and deactivated users
+                allVerifiedUsers = snapshot.documents.filter { doc ->
+                    val isAdmin = doc.getBoolean("admin") ?: false
+                    val isDeactivated = doc.getBoolean("deactivated") ?: false
+                    !isAdmin && !isDeactivated
+                }
+
                 tvTotalUsers.text = allVerifiedUsers.size.toString()
-                updateGraphFor("week")
-            }.addOnFailureListener { e ->
-                if (!isAdded) return@addOnFailureListener
-                Log.e("DashboardFragment", "Error fetching all users: ", e)
-                tvTotalUsers.text = "0"
+                
+                // Refresh the graph based on the current selection
+                val checkedId = segmentedControl.checkedRadioButtonId
+                val type = when (checkedId) {
+                    R.id.btn_day -> "day"
+                    R.id.btn_week -> "week"
+                    R.id.btn_month -> "month"
+                    R.id.btn_year -> "year"
+                    else -> "week"
+                }
+                updateGraphFor(type)
             }
     }
 
@@ -206,11 +226,9 @@ class DashboardFragment : Fragment() {
         }
 
         val dataSet = LineDataSet(entries, "Registered & Verified Users")
-        // 1. Smooth the line (Cubic Bezier)
         dataSet.mode = LineDataSet.Mode.CUBIC_BEZIER
         dataSet.cubicIntensity = 0.2f
 
-// 2. Line Styling
         dataSet.color = ContextCompat.getColor(requireContext(), R.color.red_orange)
         dataSet.lineWidth = 3f
         dataSet.setDrawCircles(true)
@@ -219,12 +237,10 @@ class DashboardFragment : Fragment() {
         dataSet.setDrawCircleHole(true)
         dataSet.circleHoleRadius = 2f
 
-// 3. Add Area Gradient Fill
         dataSet.setDrawFilled(true)
-        val fillGradient = ContextCompat.getDrawable(requireContext(), R.drawable.chart_gradient)
-        dataSet.fillDrawable = fillGradient
+        val fillDrawable = ContextCompat.getDrawable(requireContext(), R.drawable.chart_gradient)
+        dataSet.fillDrawable = fillDrawable
 
-// 4. Clean up the values
         dataSet.valueTextSize = 10f
         dataSet.valueTextColor = ContextCompat.getColor(requireContext(), R.color.black)
         dataSet.valueFormatter = object : ValueFormatter() {
@@ -262,5 +278,10 @@ class DashboardFragment : Fragment() {
             "year" -> "yyyy"
             else -> ""
         }
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        usersListener?.remove()
     }
 }

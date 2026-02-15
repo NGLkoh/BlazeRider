@@ -135,7 +135,7 @@ class SinglePostActivity : AppCompatActivity() {
             // Setup images
             if (imageUris.isNotEmpty()) {
                 imageContainer.visibility = View.VISIBLE
-                imageViewPager.adapter = PostAdapter.ImagePagerAdapter(imageUris)
+                imageViewPager.adapter = ImagePagerAdapter(imageUris)
                 if (imageUris.size > 1) {
                     imageCounter.visibility = View.VISIBLE
                     imageCounter.text = "1/${imageUris.size}"

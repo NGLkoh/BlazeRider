@@ -127,6 +127,8 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
     private lateinit var locationViewModel: LocationViewModel
 
     private var currentCityName: String = "Current Location"
+    
+    private lateinit var gpsButton: FloatingActionButton
 
     companion object {
         private var hasShownWelcomeDialog = false
@@ -259,7 +261,8 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
             return
         }
 
-        view.findViewById<FloatingActionButton>(R.id.gps_button).setOnClickListener {
+        gpsButton = view.findViewById(R.id.gps_button)
+        gpsButton.setOnClickListener {
             if (!isGPSEnabled()) showGPSEnabledDialog()
             else getCurrentLocationAndAnimate()
         }
@@ -301,6 +304,7 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
         view.findViewById<ImageView>(R.id.nav_close_button).setOnClickListener {
             navigationBottomView.visibility = View.GONE
             navigationInstructionsView.visibility = View.GONE
+            gpsButton.visibility = View.VISIBLE
             bottomView.visibility = View.VISIBLE
             map.clear()
             selectedPlaceName?.let { name ->
@@ -338,7 +342,7 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
             .setTitle("Share Ride")
             .setMessage("Choose how you want to share this ride.")
             .setPositiveButton("Share Now") { dialog, _ ->
-                shareRideNow()
+                checkExistingRideAndShare()
                 dialog.dismiss()
             }
             .setNegativeButton("Share Later") { dialog, _ ->
@@ -349,6 +353,23 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
                 dialog.dismiss()
             }
             .show()
+    }
+
+    private fun checkExistingRideAndShare() {
+        val userId = auth.currentUser?.uid ?: return
+        firestore.collection("users").document(userId).get()
+            .addOnSuccessListener { document ->
+                val currentJoinedRide = document.getString("currentJoinedRide")
+                if (!currentJoinedRide.isNullOrEmpty()) {
+                    Toast.makeText(requireContext(), "Finish your existing ride first", Toast.LENGTH_SHORT).show()
+                } else {
+                    shareRideNow()
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e("LocationFragment", "Error checking existing ride", e)
+                shareRideNow() // Fallback to sharing if check fails
+            }
     }
 
     private fun showScheduleDateTimePicker() {
@@ -384,11 +405,20 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
                         "userName" to name, 
                         "userUid" to userId,
                         "isAdminEvent" to false, // This is a user shared ride
-                        "isScheduled" to false // Not scheduled, shared now
+                        "isScheduled" to false, // Not scheduled, shared now
+                        "status" to "active"
                     )
-                    firestore.collection("sharedRoutes").add(routeData).addOnSuccessListener {
+                    
+                    val sharedRouteRef = firestore.collection("sharedRoutes").document()
+                    val batch = firestore.batch()
+                    batch.set(sharedRouteRef, routeData)
+                    batch.update(firestore.collection("users").document(userId), "currentJoinedRide", sharedRouteRef.id)
+                    
+                    batch.commit().addOnSuccessListener {
                         Toast.makeText(requireContext(), "Ride shared successfully", Toast.LENGTH_SHORT).show()
-                        startActivity(Intent(requireContext(), SharedRidesActivity::class.java))
+                        val intent = Intent(requireContext(), SharedRidesActivity::class.java)
+                        intent.putExtra("SELECT_TAB", 1) // 1 for My Rides tab
+                        startActivity(intent)
                     }
                 }
             } catch (e: Exception) { Log.e("LocationFragment", "Error sharing ride now", e) }
@@ -425,7 +455,8 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
                         "distance" to (routeDistance?.replace(" km", "")?.toDoubleOrNull() ?: 0.0),
                         "duration" to parseDurationToSeconds(routeDuration!!),
                         "isScheduled" to true, // Mark as scheduled
-                        "originalSharedRouteId" to null // No shared route yet
+                        "originalSharedRouteId" to null, // No shared route yet
+                        "status" to "active"
                     )
                     myRideRef.set(myRideData).await()
                     
@@ -445,7 +476,9 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
                     }
 
                     Toast.makeText(requireContext(), "Ride scheduled successfully for sharing", Toast.LENGTH_SHORT).show()
-                    // No direct navigation to SharedRidesActivity, as it's not shared yet
+                    val intent = Intent(requireContext(), SharedRidesActivity::class.java)
+                    intent.putExtra("SELECT_TAB", 1) // 1 for My Rides tab
+                    startActivity(intent)
                 }
             } catch (e: Exception) { Log.e("LocationFragment", "Error scheduling ride", e) }
         }
@@ -556,6 +589,7 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
                     routeEta = java.time.LocalTime.now().plusMinutes(durationMin.toLong()).format(java.time.format.DateTimeFormatter.ofPattern("hh:mm a"))
                     routePolyline = points.joinToString("|") { "${it.latitude},${it.longitude}" }
                     bottomView.visibility = View.GONE; navigationBottomView.visibility = View.VISIBLE
+                    gpsButton.visibility = View.GONE // Hide GPS button when navigation bottom view is shown
                 }
             } catch (e: Exception) { Log.e("Route", "Error: ${e.message}") }
         }
@@ -592,7 +626,7 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
     }
 
     private fun clearMarker() {
-        map.clear(); currentMarker = null; bottomView.visibility = View.GONE; navigationBottomView.visibility = View.GONE
+        map.clear(); currentMarker = null; bottomView.visibility = View.GONE; navigationBottomView.visibility = View.GONE; gpsButton.visibility = View.VISIBLE
         searchPlaceholder.text = "Your location"; selectedPlaceLat = 0.0
     }
 

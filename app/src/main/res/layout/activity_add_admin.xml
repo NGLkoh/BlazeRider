@@ -1,130 +1,150 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="24dp"
-    android:background="@android:color/white">
+    android:background="@android:color/white"
+    android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginBottom="24dp">
-
-        <ImageButton
-            android:id="@+id/backButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_chevron_left"
-            app:tint="@android:color/black"
-            android:contentDescription="Back" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Add New Admin"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:layout_marginStart="16dp"
-            android:textColor="@android:color/black" />
-    </LinearLayout>
-
-    <com.google.android.material.textfield.TextInputLayout
-        android:id="@+id/emailLayout"
-        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
-        app:boxCornerRadiusTopStart="12dp"
-        app:boxCornerRadiusTopEnd="12dp"
-        app:boxCornerRadiusBottomStart="12dp"
-        app:boxCornerRadiusBottomEnd="12dp">
-
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/email"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Email"
-            android:inputType="textEmailAddress" />
-    </com.google.android.material.textfield.TextInputLayout>
-
-    <com.google.android.material.textfield.TextInputLayout
-        android:id="@+id/passwordLayout"
-        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="8dp"
-        app:passwordToggleEnabled="true"
-        app:boxCornerRadiusTopStart="12dp"
-        app:boxCornerRadiusTopEnd="12dp"
-        app:boxCornerRadiusBottomStart="12dp"
-        app:boxCornerRadiusBottomEnd="12dp">
-
-
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/password"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Password"
-            android:inputType="textPassword" />
-    </com.google.android.material.textfield.TextInputLayout>
-
-    <LinearLayout
-        android:id="@+id/passwordAssistance"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="#F5F5F5"
         android:orientation="vertical"
-        android:padding="12dp"
-        android:layout_marginBottom="16dp">
+        android:padding="24dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="24dp">
+
+            <ImageButton
+                android:id="@+id/backButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_chevron_left"
+                app:tint="@android:color/black"
+                android:contentDescription="Back" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Admin Management"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:layout_marginStart="16dp"
+                android:textColor="@android:color/black" />
+        </LinearLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/emailLayout"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            app:boxCornerRadiusTopStart="12dp"
+            app:boxCornerRadiusTopEnd="12dp"
+            app:boxCornerRadiusBottomStart="12dp"
+            app:boxCornerRadiusBottomEnd="12dp">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/email"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Email"
+                android:inputType="textEmailAddress" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/passwordLayout"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            app:passwordToggleEnabled="true"
+            app:boxCornerRadiusTopStart="12dp"
+            app:boxCornerRadiusTopEnd="12dp"
+            app:boxCornerRadiusBottomStart="12dp"
+            app:boxCornerRadiusBottomEnd="12dp">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/password"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Password"
+                android:inputType="textPassword" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <LinearLayout
+            android:id="@+id/passwordAssistance"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#F5F5F5"
+            android:orientation="vertical"
+            android:padding="12dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Password Assistance"
+                android:textStyle="bold"
+                android:textColor="@android:color/black"
+                android:layout_marginBottom="4dp"/>
+
+            <TextView android:id="@+id/check_length" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="✕ At least 8 characters" android:textColor="#D32F2F" android:textSize="12sp" />
+            <TextView android:id="@+id/check_upper" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="✕ One uppercase" android:textColor="#D32F2F" android:textSize="12sp" />
+            <TextView android:id="@+id/check_lower" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="✕ One lowercase" android:textColor="#D32F2F" android:textSize="12sp" />
+            <TextView android:id="@+id/check_number" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="✕ One number" android:textColor="#D32F2F" android:textSize="12sp" />
+        </LinearLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/confirmPasswordLayout"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            app:passwordToggleEnabled="true"
+            app:boxCornerRadiusTopStart="12dp"
+            app:boxCornerRadiusTopEnd="12dp"
+            app:boxCornerRadiusBottomStart="12dp"
+            app:boxCornerRadiusBottomEnd="12dp">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/confirmPassword"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Confirm Password"
+                android:inputType="textPassword" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <Button
+            android:id="@+id/btnAddAdmin"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="Create Admin Account"
+            android:textAllCaps="false"
+            android:textSize="16sp"
+            android:backgroundTint="@color/red_orange"
+            android:textColor="@android:color/white" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Password Assistance"
+            android:text="Active Admins"
+            android:textSize="18sp"
             android:textStyle="bold"
-            android:textColor="@android:color/black"
-            android:layout_marginBottom="4dp"/>
+            android:layout_marginTop="32dp"
+            android:layout_marginBottom="16dp"
+            android:textColor="@android:color/black" />
 
-        <TextView android:id="@+id/check_length" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="✕ At least 8 characters" android:textColor="#D32F2F" android:textSize="12sp" />
-        <TextView android:id="@+id/check_upper" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="✕ One uppercase" android:textColor="#D32F2F" android:textSize="12sp" />
-        <TextView android:id="@+id/check_lower" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="✕ One lowercase" android:textColor="#D32F2F" android:textSize="12sp" />
-        <TextView android:id="@+id/check_number" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="✕ One number" android:textColor="#D32F2F" android:textSize="12sp" />
-    </LinearLayout>
-
-    <com.google.android.material.textfield.TextInputLayout
-        android:id="@+id/confirmPasswordLayout"
-        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="24dp"
-        app:passwordToggleEnabled="true"
-        app:boxCornerRadiusTopStart="12dp"
-        app:boxCornerRadiusTopEnd="12dp"
-        app:boxCornerRadiusBottomStart="12dp"
-        app:boxCornerRadiusBottomEnd="12dp">
-
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/confirmPassword"
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/adminRecyclerView"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Confirm Password"
-            android:inputType="textPassword"
-            />
-    </com.google.android.material.textfield.TextInputLayout>
+            android:nestedScrollingEnabled="false" />
 
-    <Button
-        android:id="@+id/btnAddAdmin"
-        android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:text="Create Admin Account"
-        android:textAllCaps="false"
-        android:textSize="16sp"
-        android:backgroundTint="@color/red_orange"
-        android:textColor="@android:color/white" />
-
-</LinearLayout>
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

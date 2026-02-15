@@ -10,7 +10,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Looper
 import android.util.Log
-import android.view.View
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
@@ -29,8 +28,6 @@ import com.google.firebase.firestore.GeoPoint
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.*
-import java.util.Timer
-import kotlin.concurrent.timerTask
 
 class MainActivity : AppCompatActivity() {
     private lateinit var auth: FirebaseAuth
@@ -87,18 +84,40 @@ class MainActivity : AppCompatActivity() {
         if (currentUser != null) {
             Log.d(TAG, "User is logged in, checking Firestore status: ${currentUser.email}")
             
+            // Special handling for the hardcoded admin user ID
+            if (currentUser.uid == "A7USXq3qwFgCH4sov6mmPdtaGOn2") {
+                startActivity(Intent(this, AdminActivity::class.java))
+                finish()
+                return
+            }
+
             // Setup presence and location listener
             setupPresenceAndLocation(currentUser.uid)
 
             db.collection("users").document(currentUser.uid).get()
                 .addOnSuccessListener { document ->
                     if (document.exists()) {
+                        // 1. CHECK FOR DEACTIVATION FIRST
+                        val isDeactivated = document.getBoolean("deactivated") ?: false
+                        if (isDeactivated) {
+                            startActivity(Intent(this, AccountDeactivatedActivity::class.java))
+                            finish()
+                            return@addOnSuccessListener
+                        }
 
-                        val admin: Boolean = document.getBoolean("admin") ?: false
+                        // 2. CONTINUE WITH ROUTING LOGIC
                         val verified = document.getBoolean("verified") ?: false
                         val stepCompleted = document.getLong("stepCompleted")?.toInt() ?: 1
                         
-                        if (admin) {
+                        // Handle admin check (supporting boolean, string, or long)
+                        val isAdmin = when (val adminValue = document.get("admin")) {
+                            is Boolean -> adminValue
+                            is String -> adminValue.toBooleanStrictOrNull() ?: false
+                            is Long -> adminValue == 1L
+                            else -> false
+                        }
+                        
+                        if (isAdmin) {
                             Log.d(TAG, "You are an admin, redirecting to AdminActivity")
                             startActivity(Intent(this, AdminActivity::class.java))
                         } else if (verified) {
@@ -129,8 +148,8 @@ class MainActivity : AppCompatActivity() {
                     finish()
                 }
         } else {
-            Log.d(TAG, "No user logged in, redirecting to SignInActivity")
-            startActivity(Intent(this, SignInActivity::class.java))
+            Log.d(TAG, "No user logged in, redirecting to MainMenuActivity")
+            startActivity(Intent(this, MainMenuActivity::class.java))
             finish()
         }
     }

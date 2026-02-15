@@ -14,10 +14,12 @@ import android.widget.TextView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.bumptech.glide.Glide
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.imageview.ShapeableImageView
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
@@ -67,6 +69,7 @@ class PostAdapter(
         private val commentsCount = itemView.findViewById<TextView>(R.id.post_comments_count)
         private val adminBadge = itemView.findViewById<TextView>(R.id.post_admin_badge)
         private val postOptionsIcon = itemView.findViewById<ImageView>(R.id.post_options_icon)
+        private val btnViewJoinedRiders = itemView.findViewById<ImageView>(R.id.btn_view_joined_riders)
 
         private val rideControlsContainer = itemView.findViewById<LinearLayout>(R.id.ride_controls_container)
         private val btnStartRoute = itemView.findViewById<MaterialButton>(R.id.btnPostStartRoute)
@@ -98,7 +101,6 @@ class PostAdapter(
 
             val isMyPost = post.userId == auth.currentUser?.uid
             
-            // Show options (like delete) only if it's my post
             if (isMyPost) {
                 postOptionsIcon.visibility = View.VISIBLE
                 postOptionsIcon.setOnClickListener { showPostMenu(it, post) }
@@ -110,9 +112,12 @@ class PostAdapter(
             
             if (post.admin && isMyPost && isRideEvent && post.sharedRouteId.isNotEmpty()) {
                 rideControlsContainer.visibility = View.VISIBLE
+                btnViewJoinedRiders.visibility = View.VISIBLE
+                btnViewJoinedRiders.setOnClickListener { showJoinedRidersDialog(post.sharedRouteId) }
                 setupRideControls(post)
             } else {
                 rideControlsContainer.visibility = View.GONE
+                btnViewJoinedRiders.visibility = View.GONE
             }
 
             setupImages(post)
@@ -126,7 +131,6 @@ class PostAdapter(
                 true
             }
             
-            // NEW: Click listener for reactions count
             reactionsCount.setOnClickListener {
                 if (post.reactionCount.values.sum() > 0) {
                     showReactionsDialog(post.id)
@@ -142,6 +146,63 @@ class PostAdapter(
                         }
                     }
             }
+        }
+
+        private fun showJoinedRidersDialog(sharedRouteId: String) {
+            val dialogView = LayoutInflater.from(itemView.context).inflate(R.layout.dialog_joined_riders, null)
+            val recyclerView = dialogView.findViewById<RecyclerView>(R.id.riders_recycler_view)
+            val titleView = dialogView.findViewById<TextView>(R.id.dialog_title)
+            val closeButton = dialogView.findViewById<android.widget.Button>(R.id.btn_close_dialog)
+
+            recyclerView.layoutManager = LinearLayoutManager(itemView.context)
+            val ridersAdapter = JoinedRidersAdapter()
+            recyclerView.adapter = ridersAdapter
+
+            val dialog = MaterialAlertDialogBuilder(itemView.context)
+                .setView(dialogView)
+                .create()
+
+            closeButton.setOnClickListener { dialog.dismiss() }
+
+            db.collection("sharedRoutes").document(sharedRouteId).get()
+                .addOnSuccessListener { doc ->
+                    if (doc.exists()) {
+                        val joinedRiders = doc.get("joinedRiders") as? Map<String, Any> ?: emptyMap()
+                        val ridersList = joinedRiders.keys.toList()
+                        
+                        if (ridersList.isEmpty()) {
+                            titleView.text = "Joined Riders (0)"
+                            dialog.show()
+                            return@addOnSuccessListener
+                        }
+
+                        titleView.text = "Joined Riders (${ridersList.size})"
+                        val ridersData = mutableListOf<Map<String, String>>()
+                        var loadedCount = 0
+
+                        ridersList.forEach { riderId ->
+                            db.collection("users").document(riderId).get()
+                                .addOnSuccessListener { userDoc ->
+                                    val firstName = userDoc.getString("firstName") ?: ""
+                                    val lastName = userDoc.getString("lastName") ?: ""
+                                    val email = userDoc.getString("email") ?: ""
+                                    val profileUrl = userDoc.getString("profileImageUrl") ?: ""
+                                    
+                                    ridersData.add(mapOf(
+                                        "name" to "$firstName $lastName",
+                                        "email" to email,
+                                        "profileUrl" to profileUrl
+                                    ))
+                                    loadedCount++
+
+                                    if (loadedCount == ridersList.size) {
+                                        ridersAdapter.submitList(ridersData)
+                                        dialog.show()
+                                    }
+                                }
+                        }
+                    }
+                }
         }
 
         private fun showPostMenu(view: View, post: Post) {
@@ -351,12 +412,43 @@ class PostAdapter(
         }
     }
 
-    class ImagePagerAdapter(private val urls: List<String>) : RecyclerView.Adapter<ImagePagerAdapter.ViewHolder>() {
-        class ViewHolder(v: View) : RecyclerView.ViewHolder(v) { val img = v as ImageView }
-        override fun onCreateViewHolder(p: ViewGroup, t: Int) = ViewHolder(ImageView(p.context).apply { 
-            layoutParams = ViewGroup.LayoutParams(-1, -1); scaleType = ImageView.ScaleType.CENTER_CROP 
-        })
-        override fun onBindViewHolder(h: ViewHolder, p: Int) { Glide.with(h.img).load(urls[p]).into(h.img) }
-        override fun getItemCount() = urls.size
+    inner class JoinedRidersAdapter : RecyclerView.Adapter<JoinedRidersAdapter.ViewHolder>() {
+        private var riders = listOf<Map<String, String>>()
+        fun submitList(newList: List<Map<String, String>>) {
+            riders = newList
+            notifyDataSetChanged()
+        }
+        override fun onCreateViewHolder(p: ViewGroup, t: Int) = ViewHolder(LayoutInflater.from(p.context).inflate(R.layout.item_joined_rider, p, false))
+        override fun onBindViewHolder(h: ViewHolder, p: Int) {
+            val r = riders[p]
+            h.name.text = r["name"]
+            h.email.text = r["email"]
+            Glide.with(h.itemView.context).load(r["profileUrl"]).placeholder(R.drawable.ic_anonymous).into(h.pic)
+        }
+        override fun getItemCount() = riders.size
+        inner class ViewHolder(v: View) : RecyclerView.ViewHolder(v) {
+            val pic = v.findViewById<ShapeableImageView>(R.id.rider_profile_pic)
+            val name = v.findViewById<TextView>(R.id.rider_full_name)
+            val email = v.findViewById<TextView>(R.id.rider_email)
+        }
     }
+}
+
+class ImagePagerAdapter(private val urls: List<String>) : RecyclerView.Adapter<ImagePagerAdapter.ViewHolder>() {
+    class ViewHolder(v: View) : RecyclerView.ViewHolder(v) { 
+        val img = v as ImageView
+    }
+    override fun onCreateViewHolder(p: ViewGroup, t: Int) = ViewHolder(ImageView(p.context).apply { 
+        layoutParams = ViewGroup.LayoutParams(-1, -1); scaleType = ImageView.ScaleType.CENTER_CROP 
+    })
+    override fun onBindViewHolder(h: ViewHolder, p: Int) { 
+        Glide.with(h.img).load(urls[p]).into(h.img)
+        h.img.setOnClickListener {
+            val intent = Intent(h.img.context, FullScreenImageActivity::class.java).apply {
+                putExtra("IMAGE_URL", urls[p])
+            }
+            h.img.context.startActivity(intent)
+        }
+    }
+    override fun getItemCount() = urls.size
 }

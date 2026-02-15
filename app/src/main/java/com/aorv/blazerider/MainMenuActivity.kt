@@ -10,17 +10,11 @@ class MainMenuActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Check if the user is already logged in
+        // If the user is somehow already logged in when reaching this screen,
+        // redirect them to MainActivity so it can handle the routing logic.
         val currentUser = FirebaseAuth.getInstance().currentUser
         if (currentUser != null) {
-            // User is logged in, handle routing based on UID
-            if (currentUser.uid == "A7USXq3qwFgCH4sov6mmPdtaGOn2") {
-                startActivity(Intent(this, AdminActivity::class.java))
-            } else {
-                // For other users, redirect to SignInActivity so it can handle full routing logic
-                // (checking Firestore for verified status, stepCompleted, and generic isAdmin flag)
-                startActivity(Intent(this, SignInActivity::class.java))
-            }
+            startActivity(Intent(this, MainActivity::class.java))
             finish()
             return
         }

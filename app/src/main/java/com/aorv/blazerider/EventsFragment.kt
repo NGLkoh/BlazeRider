@@ -221,7 +221,19 @@ class EventsFragment : Fragment() {
     }
 
     private fun deletePost(post: Post) {
-        db.collection("posts").document(post.id).delete().addOnSuccessListener {
+        val batch = db.batch()
+        
+        // 1. Delete the post itself
+        val postRef = db.collection("posts").document(post.id)
+        batch.delete(postRef)
+        
+        // 2. If it's a ride event, delete the associated sharedRoute
+        if (post.sharedRouteId.isNotEmpty()) {
+            val sharedRouteRef = db.collection("sharedRoutes").document(post.sharedRouteId)
+            batch.delete(sharedRouteRef)
+        }
+        
+        batch.commit().addOnSuccessListener {
             if (isAdded) {
                 Toast.makeText(requireContext(), "Event deleted", Toast.LENGTH_SHORT).show()
                 if (queryStartDate != null && queryEndDate != null) {
@@ -229,6 +241,9 @@ class EventsFragment : Fragment() {
                     loadEventDots()
                 }
             }
+        }.addOnFailureListener { e ->
+            Log.e("EventsFragment", "Error deleting event: ${e.message}")
+            if (isAdded) Toast.makeText(requireContext(), "Error deleting event", Toast.LENGTH_SHORT).show()
         }
     }
 }

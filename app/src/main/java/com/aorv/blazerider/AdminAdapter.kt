@@ -10,7 +10,7 @@ class AdminAdapter(private var adminList: List<Admin>) :
     RecyclerView.Adapter<AdminAdapter.AdminViewHolder>() {
 
     class AdminViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        val nameText: TextView = view.findViewById(R.id.admin_name)
+        val nameText: TextView = view.findViewById(R.id.admin_full_name)
         val emailText: TextView = view.findViewById(R.id.admin_email)
     }
 

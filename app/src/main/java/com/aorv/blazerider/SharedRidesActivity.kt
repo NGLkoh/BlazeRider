@@ -1,8 +1,6 @@
 package com.aorv.blazerider
 
 import android.content.Intent
-import android.location.Address
-import android.location.Geocoder
 import android.os.Bundle
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
@@ -23,7 +21,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import java.util.Locale
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.firebase.firestore.SetOptions
 
@@ -36,6 +33,7 @@ class SharedRidesActivity : AppCompatActivity() {
     private lateinit var cancelRideButton: MaterialButton
     private var userListener: ListenerRegistration? = null
     private val TAG = "SharedRidesActivity"
+    private lateinit var viewPager: ViewPager2
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,7 +55,7 @@ class SharedRidesActivity : AppCompatActivity() {
         cancelRideButton = findViewById(R.id.cancel_ride_button)
 
         // Set up ViewPager2 and TabLayout
-        val viewPager = findViewById<ViewPager2>(R.id.view_pager)
+        viewPager = findViewById(R.id.view_pager)
         val tabLayout = findViewById<TabLayout>(R.id.tab_layout)
         viewPager.adapter = SharedRidesPagerAdapter(this)
         TabLayoutMediator(tabLayout, viewPager) { tab, position ->
@@ -67,6 +65,10 @@ class SharedRidesActivity : AppCompatActivity() {
                 else -> null
             }
         }.attach()
+
+        // Handle tab selection from intent
+        val selectedTab = intent.getIntExtra("SELECT_TAB", 0)
+        viewPager.setCurrentItem(selectedTab, false)
 
         // Check for active ride and display banner
         checkAndDisplayRideBanner()
@@ -93,35 +95,38 @@ class SharedRidesActivity : AppCompatActivity() {
         // Handle Cancel Ride button
         cancelRideButton.setOnClickListener {
             auth.currentUser?.uid?.let { userId ->
-                // Show confirmation dialog
-                android.app.AlertDialog.Builder(this)
-                    .setTitle("Cancel Ride")
-                    .setMessage("Are you sure you want to quit the ride?")
-                    .setPositiveButton("Yes") { _, _ ->
-                        db.collection("users").document(userId).get()
-                            .addOnSuccessListener { userDoc ->
-                                val currentJoinedRide = userDoc.getString("currentJoinedRide")
-                                if (currentJoinedRide != null) {
-                                    val role = userDoc.getString("role") ?: "customer"
-                                    cancelRide(userId, currentJoinedRide, if (role == "rider") "completed" else "cancelled")
-                                } else {
-                                    Log.w(TAG, "No active ride to cancel")
-                                    rideBanner.isVisible = false
-                                    android.widget.Toast.makeText(this, "No active ride to cancel", android.widget.Toast.LENGTH_SHORT).show()
+                db.collection("users").document(userId).get()
+                    .addOnSuccessListener { userDoc ->
+                        val currentJoinedRide = userDoc.getString("currentJoinedRide")
+                        if (currentJoinedRide != null) {
+                            db.collection("sharedRoutes").document(currentJoinedRide).get()
+                                .addOnSuccessListener { rideDoc ->
+                                    val isHost = rideDoc.getString("userUid") == userId
+                                    val title = if (isHost) "Cancel Ride" else "Quit Ride"
+                                    val message = if (isHost) "Are you sure you want to cancel your ride? This will remove it for everyone." else "Are you sure you want to quit this ride?"
+
+                                    android.app.AlertDialog.Builder(this)
+                                        .setTitle(title)
+                                        .setMessage(message)
+                                        .setPositiveButton("Yes") { _, _ ->
+                                            cancelRide(userId, currentJoinedRide)
+                                        }
+                                        .setNegativeButton("No", null)
+                                        .show()
                                 }
-                            }
-                            .addOnFailureListener { e ->
-                                Log.e(TAG, "Error fetching user document: ${e.message}")
-                                android.widget.Toast.makeText(this, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                            }
+                        } else {
+                            rideBanner.isVisible = false
+                        }
                     }
-                    .setNegativeButton("No") { dialog, _ ->
-                        dialog.dismiss()
-                    }
-                    .setCancelable(true)
-                    .show()
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val selectedTab = intent.getIntExtra("SELECT_TAB", 0)
+        viewPager.setCurrentItem(selectedTab, false)
     }
 
     private fun setupUserListener() {
@@ -142,31 +147,37 @@ class SharedRidesActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // Remove the listener to prevent memory leaks
         userListener?.remove()
     }
 
-    private fun cancelRide(userId: String, rideId: String, status: String) {
+    private fun cancelRide(userId: String, rideId: String) {
         db.runTransaction { transaction ->
             val userRef = db.collection("users").document(userId)
             val rideRef = db.collection("sharedRoutes").document(rideId)
             val rideDoc = transaction.get(rideRef)
 
-            if (rideDoc.exists() && (rideDoc.getString("userUid") == userId || rideDoc.get("joinedRiders.$userId") != null)) {
-                // Remove the user from joinedRiders
-                transaction.update(rideRef, "joinedRiders.$userId", FieldValue.delete())
-                // Clear currentJoinedRide in user document
-                transaction.set(userRef, mapOf("currentJoinedRide" to null), SetOptions.merge())
+            if (rideDoc.exists()) {
+                val hostUid = rideDoc.getString("userUid")
+                if (hostUid == userId) {
+                    // Host is cancelling the entire ride
+                    transaction.update(rideRef, "status", "cancelled")
+                } else {
+                    // Joiner is leaving the ride
+                    transaction.update(rideRef, "joinedRiders.$userId", FieldValue.delete())
+                }
+                // Clear currentJoinedRide in user document for this user
+                transaction.update(userRef, "currentJoinedRide", null)
             } else {
-                throw Exception("User is not part of this ride")
+                // If ride doesn't exist, just clear user's status
+                transaction.update(userRef, "currentJoinedRide", null)
             }
         }.addOnSuccessListener {
-            Log.d(TAG, "Ride $rideId cancelled for user $userId")
+            Log.d(TAG, "Ride $rideId handled for user $userId")
             rideBanner.isVisible = false
-            android.widget.Toast.makeText(this, "Ride cancelled", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, "Ride updated", android.widget.Toast.LENGTH_SHORT).show()
         }.addOnFailureListener { e ->
-            Log.e(TAG, "Failed to cancel ride: ${e.message}")
-            android.widget.Toast.makeText(this, "Cannot cancel ride: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+            Log.e(TAG, "Failed to update ride: ${e.message}")
+            android.widget.Toast.makeText(this, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -177,32 +188,38 @@ class SharedRidesActivity : AppCompatActivity() {
                     val userDoc = db.collection("users").document(userId).get().await()
                     val currentJoinedRide = userDoc.getString("currentJoinedRide")
                     val userFirstName = userDoc.getString("firstName") ?: "User"
-                    val role = userDoc.getString("role") ?: "customer"
 
-                    Log.d(TAG, "Checking currentJoinedRide: $currentJoinedRide")
-                    if (currentJoinedRide != null) {
+                    if (!currentJoinedRide.isNullOrEmpty()) {
                         val rideDoc = db.collection("sharedRoutes").document(currentJoinedRide).get().await()
-                        if (rideDoc.exists() && (rideDoc.getString("userUid") == userId || rideDoc.getString("joinedRiders.$userId.status") == "confirmed")) {
-                            val riderUid = rideDoc.getString("userUid") ?: ""
-                            val riderName = if (riderUid == userId) {
-                                "$userFirstName ${userDoc.getString("lastName") ?: ""}".trim()
-                            } else {
-                                val riderDoc = db.collection("users").document(riderUid).get().await()
-                                "${riderDoc.getString("firstName") ?: "Rider"} ${riderDoc.getString("lastName") ?: ""}".trim()
-                            }
-                            val customerName = if (role == "customer") userFirstName else riderName
-
-                            val origin = rideDoc.getString("origin") ?: "Unknown Origin"
+                        if (rideDoc.exists() && rideDoc.getString("status") != "completed" && rideDoc.getString("status") != "cancelled") {
+                            val hostUid = rideDoc.getString("userUid") ?: ""
+                            val isHost = hostUid == userId
+                            
+                            val origin = rideDoc.getString("origin") ?: "Current Location"
                             val destination = rideDoc.getString("destination") ?: "Unknown Destination"
-                            val message = if (role == "customer") {
-                                "$userFirstName, your ride with $riderName from $origin to $destination is in progress."
+
+                            val message = if (isHost) {
+                                val joinedRiders = rideDoc.get("joinedRiders") as? Map<String, Any>
+                                val ridersCount = joinedRiders?.size ?: 0
+                                if (ridersCount > 0) {
+                                    "$userFirstName, your ride to $destination is in progress with $ridersCount rider(s) joined."
+                                } else {
+                                    "$userFirstName, your ride to $destination is active and awaiting riders."
+                                }
                             } else {
-                                "$userFirstName, you are driving $customerName from $origin to $destination."
+                                val riderDoc = db.collection("users").document(hostUid).get().await()
+                                val hostName = "${riderDoc.getString("firstName") ?: "Rider"} ${riderDoc.getString("lastName") ?: ""}".trim()
+                                "$userFirstName, your ride with $hostName to $destination is in progress."
                             }
+                            
                             rideMessage.text = message
                             rideBanner.isVisible = true
-                            cancelRideButton.text = if (role == "rider") "End Ride" else "Cancel Ride"
+                            cancelRideButton.text = if (isHost) "Cancel Ride" else "Quit Ride"
                         } else {
+                            // Ride is finished, cancelled, or missing
+                            if (rideDoc.exists() || currentJoinedRide != null) {
+                                db.collection("users").document(userId).update("currentJoinedRide", null)
+                            }
                             rideBanner.isVisible = false
                         }
                     } else {
