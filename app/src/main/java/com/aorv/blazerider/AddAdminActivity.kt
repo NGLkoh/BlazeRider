@@ -20,7 +20,9 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.imageview.ShapeableImageView
 import com.google.android.material.textfield.TextInputLayout
 import com.google.android.material.textfield.TextInputEditText
+import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 
@@ -39,7 +41,9 @@ class AddAdminActivity : AppCompatActivity() {
         db = FirebaseFirestore.getInstance()
         mainAuth = FirebaseAuth.getInstance()
 
+        val emailLayout = findViewById<TextInputLayout>(R.id.emailLayout)
         val emailEditText = findViewById<TextInputEditText>(R.id.email)
+        val passwordLayout = findViewById<TextInputLayout>(R.id.passwordLayout)
         val passwordEditText = findViewById<TextInputEditText>(R.id.password)
         val confirmPasswordEditText = findViewById<TextInputEditText>(R.id.confirmPassword)
         val confirmLayout = findViewById<TextInputLayout>(R.id.confirmPasswordLayout)
@@ -62,11 +66,21 @@ class AddAdminActivity : AppCompatActivity() {
         // Fetch Admins
         fetchAdmins()
 
+        // Real-time Email validation clearing
+        emailEditText.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                emailLayout.error = null
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+
         // Real-time Password Validation
         passwordEditText.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 val password = s.toString()
+                passwordLayout.error = null
 
                 updateCheck(checkLength, password.length >= 8, "At least 8 characters")
                 updateCheck(checkUpper, password.any { it.isUpperCase() }, "One uppercase")
@@ -76,13 +90,31 @@ class AddAdminActivity : AppCompatActivity() {
             override fun afterTextChanged(s: Editable?) {}
         })
 
+        confirmPasswordEditText.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                confirmLayout.error = null
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+
         btnAddAdmin.setOnClickListener {
             val email = emailEditText.text.toString().trim()
             val password = passwordEditText.text.toString().trim()
             val confirm = confirmPasswordEditText.text.toString().trim()
 
-            if (email.isEmpty() || password.isEmpty()) {
-                Toast.makeText(this, "Please fill all fields", Toast.LENGTH_SHORT).show()
+            // Reset errors
+            emailLayout.error = null
+            passwordLayout.error = null
+            confirmLayout.error = null
+
+            if (email.isEmpty()) {
+                emailLayout.error = "Email is required"
+                return@setOnClickListener
+            }
+
+            if (password.isEmpty()) {
+                passwordLayout.error = "Password is required"
                 return@setOnClickListener
             }
 
@@ -90,19 +122,26 @@ class AddAdminActivity : AppCompatActivity() {
                     password.any { it.isLowerCase() } && password.any { it.isDigit() }
 
             if (!isValid) {
-                Toast.makeText(this, "Password does not meet requirements", Toast.LENGTH_SHORT).show()
+                passwordLayout.error = "Password does not meet requirements"
                 return@setOnClickListener
             }
 
             if (password != confirm) {
                 confirmLayout.error = "Passwords do not match"
                 return@setOnClickListener
-            } else {
-                confirmLayout.error = null
             }
 
-            // Create Admin Logic
-            mainAuth.createUserWithEmailAndPassword(email, password)
+            // Create Admin Logic using a secondary Firebase app instance
+            // This prevents the current admin session from being signed out
+            val secondaryApp = try {
+                FirebaseApp.getInstance("AdminCreationApp")
+            } catch (e: Exception) {
+                FirebaseApp.initializeApp(this, FirebaseApp.getInstance().options, "AdminCreationApp")
+            }
+            
+            val secondaryAuth = FirebaseAuth.getInstance(secondaryApp)
+
+            secondaryAuth.createUserWithEmailAndPassword(email, password)
                 .addOnSuccessListener { result ->
                     val uid = result.user?.uid ?: return@addOnSuccessListener
                     val adminData = mapOf(
@@ -121,10 +160,15 @@ class AddAdminActivity : AppCompatActivity() {
                             emailEditText.text = null
                             passwordEditText.text = null
                             confirmPasswordEditText.text = null
+                            secondaryAuth.signOut()
                         }
                 }
                 .addOnFailureListener { e ->
-                    Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                    if (e is FirebaseAuthUserCollisionException) {
+                        emailLayout.error = "This email address is already in use by another account."
+                    } else {
+                        Toast.makeText(this, e.localizedMessage ?: "Creation failed", Toast.LENGTH_SHORT).show()
+                    }
                 }
         }
     }
@@ -157,16 +201,17 @@ class AddAdminActivity : AppCompatActivity() {
         }
 
         MaterialAlertDialogBuilder(this)
-            .setTitle("Remove Admin")
-            .setMessage("Are you sure you want to remove $adminName from the administrators? They will no longer have admin access.")
-            .setPositiveButton("Remove") { _, _ ->
+            .setTitle("Delete Admin Account")
+            .setMessage("Are you sure you want to delete the account for $adminName? This action cannot be undone and they will no longer have access to the app.")
+            .setPositiveButton("Delete") { _, _ ->
+                // Delete the document from Firestore
                 db.collection("users").document(adminUid)
-                    .update("admin", false)
+                    .delete()
                     .addOnSuccessListener {
-                        Toast.makeText(this, "Admin access removed", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Admin account deleted from database", Toast.LENGTH_SHORT).show()
                     }
                     .addOnFailureListener { e ->
-                        Toast.makeText(this, "Failed to remove admin: ${e.message}", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Failed to delete account record: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
             }
             .setNegativeButton("Cancel", null)
