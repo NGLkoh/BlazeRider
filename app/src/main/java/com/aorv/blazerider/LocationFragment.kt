@@ -122,7 +122,6 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
     private var routeDistance: String? = null
     private var routeEta: String? = null
     private var routePolyline: String? = null
-    private val START_ROUTE_ACTIVITY_REQUEST_CODE = 104
     private lateinit var geoFire: GeoFire
     private lateinit var locationViewModel: LocationViewModel
 
@@ -198,7 +197,7 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
                     currentLocation = newLocation
                     lastKnownLocation = newLocation
                     locationViewModel.updateLocation(newLocation)
-                    map.animateCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 15f))
+                    map.animateCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 17f))
 
                     checkAndFetchWeather(location.latitude, location.longitude)
 
@@ -234,7 +233,6 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
                         res[0]
                     } else Float.MAX_VALUE
 
-                    // Only update if 1 hour has passed OR user has moved more than 5km
                     shouldUpdate = timeDiff > WEATHER_NOTIFICATION_COOLDOWN_MS || distance > WEATHER_DISTANCE_THRESHOLD_METERS
                 }
 
@@ -280,8 +278,8 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
         placeAddressTextView = view.findViewById(R.id.place_address)
         navigationBottomView = view.findViewById(R.id.navigation_bottom_view)
         navigationInstructionsView = view.findViewById(R.id.navigation_instructions_view)
-        tripDurationTextView = view.findViewById(R.id.trip_duration)
-        tripDistanceTextView = view.findViewById(R.id.trip_distance)
+        tripDurationTextView = navigationBottomView.findViewById(R.id.trip_duration)
+        tripDistanceTextView = navigationBottomView.findViewById(R.id.trip_distance)
 
         searchBarButton.setOnClickListener {
             startActivityForResult(Intent(requireContext(), SearchActivity::class.java), SEARCH_ACTIVITY_REQUEST_CODE)
@@ -301,7 +299,7 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
             else if (currentLocation != null) drawRouteForMotorcycle()
         }
 
-        view.findViewById<ImageView>(R.id.nav_close_button).setOnClickListener {
+        navigationBottomView.findViewById<ImageView>(R.id.nav_close_button).setOnClickListener {
             navigationBottomView.visibility = View.GONE
             navigationInstructionsView.visibility = View.GONE
             gpsButton.visibility = View.VISIBLE
@@ -310,26 +308,26 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
             selectedPlaceName?.let { name ->
                 val loc = LatLng(selectedPlaceLat, selectedPlaceLng)
                 currentMarker = map.addMarker(MarkerOptions().position(loc).title(name))
-                map.animateCamera(CameraUpdateFactory.newLatLngZoom(loc, 15f))
+                map.animateCamera(CameraUpdateFactory.newLatLngZoom(loc, 17f))
             }
         }
 
-        view.findViewById<Button>(R.id.nav_start_button).setOnClickListener {
-            if (routeInstructions != null) {
-                val intent = Intent(requireContext(), StartRouteActivity::class.java).apply {
-                    putExtra("instructions", routeInstructions); putExtra("duration", routeDuration)
-                    putExtra("distance", routeDistance); putExtra("eta", routeEta)
-                    putExtra("polyline", routePolyline); putExtra("destination", LatLng(selectedPlaceLat, selectedPlaceLng))
-                    putExtra("step_polylines", ArrayList(stepPolylines)); putExtra("destination_lat", selectedPlaceLat); putExtra("destination_lng", selectedPlaceLng)
-                    putExtra("user_id", auth.currentUser?.uid) // Pass userId
-                    putExtra("destination_name", selectedPlaceName) // Pass destination name
+        navigationBottomView.findViewById<Button>(R.id.nav_start_button).setOnClickListener {
+            if (selectedPlaceName != null) {
+                CoroutineScope(Dispatchers.Main).launch {
+                    val startName = currentLocation?.let { reverseGeocodeFallback(it.latitude, it.longitude) } ?: "Current Location"
+                    val intent = Intent(requireContext(), InAppNavigationActivity::class.java).apply {
+                        putExtra("destination_name", selectedPlaceName)
+                        putExtra("destination_lat", selectedPlaceLat)
+                        putExtra("destination_lng", selectedPlaceLng)
+                        putExtra("start_location_name", startName)
+                    }
+                    startActivity(intent)
                 }
-                startActivityForResult(intent, START_ROUTE_ACTIVITY_REQUEST_CODE)
-                selectedPlaceName?.let { logRideToHistory(it) }
             }
         }
 
-        view.findViewById<Button>(R.id.nav_share_ride_button).setOnClickListener {
+        navigationBottomView.findViewById<Button>(R.id.nav_share_ride_button).setOnClickListener {
             showShareRideOptionsDialog()
         }
 
@@ -368,7 +366,7 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
             }
             .addOnFailureListener { e ->
                 Log.e("LocationFragment", "Error checking existing ride", e)
-                shareRideNow() // Fallback to sharing if check fails
+                shareRideNow()
             }
     }
 
@@ -395,7 +393,7 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
                     val name = "${document.getString("firstName")} ${document.getString("lastName")}".trim()
                     val routeData = hashMapOf(
                         "datetime" to FieldValue.serverTimestamp(), 
-                        "createdAt" to FieldValue.serverTimestamp(), // Publish immediately
+                        "createdAt" to FieldValue.serverTimestamp(),
                         "destination" to selectedPlaceName,
                         "destinationCoordinates" to mapOf("latitude" to selectedPlaceLat, "longitude" to selectedPlaceLng),
                         "distance" to (routeDistance?.replace(" km", "")?.toDoubleOrNull() ?: 0.0),
@@ -404,8 +402,8 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
                         "originCoordinates" to mapOf("latitude" to currentLocation!!.latitude, "longitude" to currentLocation!!.longitude),
                         "userName" to name, 
                         "userUid" to userId,
-                        "isAdminEvent" to false, // This is a user shared ride
-                        "isScheduled" to false, // Not scheduled, shared now
+                        "isAdminEvent" to false,
+                        "isScheduled" to false,
                         "status" to "active"
                     )
                     
@@ -417,7 +415,7 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
                     batch.commit().addOnSuccessListener {
                         Toast.makeText(requireContext(), "Ride shared successfully", Toast.LENGTH_SHORT).show()
                         val intent = Intent(requireContext(), SharedRidesActivity::class.java)
-                        intent.putExtra("SELECT_TAB", 1) // 1 for My Rides tab
+                        intent.putExtra("SELECT_TAB", 1)
                         startActivity(intent)
                     }
                 }
@@ -433,15 +431,12 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
                 val originAddress = reverseGeocodeFallback(currentLocation!!.latitude, currentLocation!!.longitude)
                 val document = firestore.collection("users").document(userId).get().await()
                 if (document.exists()) {
-                    val name = "${document.getString("firstName")} ${document.getString("lastName")}".trim()
-                    
-                    // Create a new document in the 'rides' collection (My Rides)
                     val myRideRef = firestore.collection("rides").document()
 
                     val myRideData = hashMapOf(
                         "rideName" to "Ride to $selectedPlaceName",
                         "description" to "Scheduled ride to $selectedPlaceName",
-                        "rideTimestamp" to scheduleTimestamp, // The actual ride time
+                        "rideTimestamp" to scheduleTimestamp,
                         "startLocationName" to originAddress,
                         "startLocationAddress" to originAddress,
                         "startLat" to currentLocation!!.latitude,
@@ -451,16 +446,15 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
                         "endLat" to selectedPlaceLat,
                         "endLng" to selectedPlaceLng,
                         "hostId" to userId,
-                        "createdAt" to java.util.Date(scheduleTimestamp), // The time it will be published
+                        "createdAt" to java.util.Date(scheduleTimestamp),
                         "distance" to (routeDistance?.replace(" km", "")?.toDoubleOrNull() ?: 0.0),
                         "duration" to parseDurationToSeconds(routeDuration!!),
-                        "isScheduled" to true, // Mark as scheduled
-                        "originalSharedRouteId" to null, // No shared route yet
+                        "isScheduled" to true,
+                        "originalSharedRouteId" to null,
                         "status" to "active"
                     )
                     myRideRef.set(myRideData).await()
                     
-                    // Schedule the WorkManager task to publish the ride to 'sharedRoutes'
                     val delay = scheduleTimestamp - System.currentTimeMillis()
                     if (delay > 0) {
                         val data = Data.Builder()
@@ -477,7 +471,7 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
 
                     Toast.makeText(requireContext(), "Ride scheduled successfully for sharing", Toast.LENGTH_SHORT).show()
                     val intent = Intent(requireContext(), SharedRidesActivity::class.java)
-                    intent.putExtra("SELECT_TAB", 1) // 1 for My Rides tab
+                    intent.putExtra("SELECT_TAB", 1)
                     startActivity(intent)
                 }
             } catch (e: Exception) { Log.e("LocationFragment", "Error scheduling ride", e) }
@@ -582,14 +576,14 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
                 val distKm = leg.getJSONObject("distance").getInt("value") / 1000.0
                 
                 withContext(Dispatchers.Main) {
-                    map.addPolyline(PolylineOptions().addAll(points).color(Color.BLUE).width(10f))
+                    map.addPolyline(PolylineOptions().addAll(points).color(Color.parseColor("#FF4500")).width(12f))
                     tripDurationTextView.text = formatDuration(durationMin); tripDistanceTextView.text = "(${String.format("%.1f km", distKm)})"
                     routeInstructions = leg.getJSONArray("steps").let { steps -> (0 until steps.length()).joinToString("\n") { steps.getJSONObject(it).getString("html_instructions").replace("<[^>]*>".toRegex(), "") } }
                     routeDuration = formatDuration(durationMin); routeDistance = String.format("%.1f km", distKm)
                     routeEta = java.time.LocalTime.now().plusMinutes(durationMin.toLong()).format(java.time.format.DateTimeFormatter.ofPattern("hh:mm a"))
                     routePolyline = points.joinToString("|") { "${it.latitude},${it.longitude}" }
                     bottomView.visibility = View.GONE; navigationBottomView.visibility = View.VISIBLE
-                    gpsButton.visibility = View.GONE // Hide GPS button when navigation bottom view is shown
+                    gpsButton.visibility = View.GONE
                 }
             } catch (e: Exception) { Log.e("Route", "Error: ${e.message}") }
         }
@@ -619,7 +613,7 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
                 selectedPlaceName = it.getStringExtra("SEARCH_QUERY"); selectedPlaceAddress = it.getStringExtra("PLACE_ADDRESS"); selectedPlaceLat = it.getDoubleExtra("PLACE_LAT", 0.0); selectedPlaceLng = it.getDoubleExtra("PLACE_LNG", 0.0)
                 searchPlaceholder.text = selectedPlaceName; val loc = LatLng(selectedPlaceLat, selectedPlaceLng)
                 currentMarker?.remove(); currentMarker = map.addMarker(MarkerOptions().position(loc).title(selectedPlaceName))
-                map.animateCamera(CameraUpdateFactory.newLatLngZoom(loc, 15f)); placeNameTextView.text = selectedPlaceName; placeAddressTextView.text = selectedPlaceAddress; bottomView.visibility = View.VISIBLE
+                map.animateCamera(CameraUpdateFactory.newLatLngZoom(loc, 17f)); placeNameTextView.text = selectedPlaceName; placeAddressTextView.text = selectedPlaceAddress; bottomView.visibility = View.VISIBLE
             }
             GPS_SETTINGS_REQUEST_CODE -> if (isGPSEnabled()) enableMyLocation()
         }

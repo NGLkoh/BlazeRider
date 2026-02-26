@@ -6,4 +6,5 @@ plugins {
     alias(libs.plugins.compose.compiler) // Add Compose Compiler plugin
     alias(libs.plugins.kotlin.kapt) apply false
 
+
 }

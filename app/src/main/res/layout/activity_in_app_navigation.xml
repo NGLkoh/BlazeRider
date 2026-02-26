@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".InAppNavigationActivity">
+
+    <fragment
+        android:id="@+id/map"
+        android:name="com.google.android.gms.maps.SupportMapFragment"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@android:color/transparent"
+        app:navigationIcon="@drawable/ic_chevron_left"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Current Step Instruction Panel (Like Google Maps) -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/instruction_panel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="12dp"
+        app:cardCornerRadius="12dp"
+        app:cardElevation="8dp"
+        app:cardBackgroundColor="@color/green"
+        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="16dp"
+            android:gravity="center_vertical">
+
+            <ImageView
+                android:id="@+id/instruction_icon"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@drawable/ic_blue_arrow"
+                app:tint="@android:color/white" />
+
+            <TextView
+                android:id="@+id/text_instruction"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:text="Heading towards destination"
+                android:textColor="@android:color/white"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/gps_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:src="@drawable/ic_gps_round"
+        app:backgroundTint="@android:color/white"
+        app:tint="@android:color/black"
+        app:layout_constraintBottom_toTopOf="@id/nav_info_card"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:contentDescription="Center on current location" />
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/nav_info_card"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="12dp"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="12dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/trip_duration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="-- min"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:textColor="@color/green"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintStart_toStartOf="parent" />
+
+            <TextView
+                android:id="@+id/text_distance_remaining"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Calculating..."
+                android:textSize="18sp"
+                android:layout_marginStart="8dp"
+                app:layout_constraintBottom_toBottomOf="@id/trip_duration"
+                app:layout_constraintStart_toEndOf="@id/trip_duration" />
+
+            <TextView
+                android:id="@+id/trip_eta"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="ETA: --:--"
+                android:textSize="18sp"
+                app:layout_constraintTop_toBottomOf="@id/trip_duration"
+                app:layout_constraintStart_toStartOf="parent" />
+
+            <TextView
+                android:id="@+id/text_destination"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:text="Loading Destination..."
+                android:textSize="14sp"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:layout_marginTop="4dp"
+                app:layout_constraintTop_toBottomOf="@id/trip_eta"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/exit_nav_button" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/exit_nav_button"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Exit"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent" />
+
+            <TextView
+                android:id="@+id/text_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Navigating"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/holo_blue_dark"
+                android:layout_marginTop="4dp"
+                app:layout_constraintTop_toBottomOf="@id/text_destination"
+                app:layout_constraintStart_toStartOf="parent" />
+                
+            <TextView
+                android:id="@+id/text_current_location"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintStart_toStartOf="parent" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

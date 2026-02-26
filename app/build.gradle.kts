@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.google.gms.google.services)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.kotlin.kapt)
+    id("kotlin-parcelize")
 }
 
 val navSdkVersion by extra(  "6.0.0")

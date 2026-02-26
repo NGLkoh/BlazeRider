@@ -135,6 +135,9 @@
         <activity android:name=".CreateRideActivity"
             android:theme="@style/Theme.Material3.DynamicColors.Light.NoActionBar"
             android:windowSoftInputMode="adjustResize" />
+        
+        <activity android:name=".InAppNavigationActivity"
+            android:theme="@style/Theme.Material3.DynamicColors.Light.NoActionBar" />
 
         <meta-data
             android:name="com.google.android.geo.API_KEY"

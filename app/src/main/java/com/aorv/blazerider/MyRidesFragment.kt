@@ -4,7 +4,6 @@ import android.content.Intent
 import android.location.Address
 import android.location.Geocoder
 import android.location.Location
-import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -14,6 +13,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.Observer 
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.aorv.blazerider.databinding.ItemRidesBinding
@@ -24,6 +24,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.ktx.toObject
+import com.google.android.gms.maps.model.LatLng
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -175,6 +176,9 @@ class MyRidesFragment : Fragment() {
         override fun getItemCount(): Int = rides.size
 
         inner class ViewHolder(private val binding: ItemRidesBinding) : RecyclerView.ViewHolder(binding.root) {
+            private var hasArrived = false
+            private var locationObserver: Observer<LatLng?>? = null
+
             fun bind(ride: SharedRide) {
                 val userId = auth.currentUser?.uid ?: return
 
@@ -222,7 +226,6 @@ class MyRidesFragment : Fragment() {
 
                 val isRideCreator = ride.userUid == userId
                 
-                // Show view riders button for creator if there are joined riders
                 if (isRideCreator && ridersCount > 0) {
                     binding.viewRidersBtn.visibility = View.VISIBLE
                     binding.viewRidersBtn.setOnClickListener {
@@ -234,67 +237,61 @@ class MyRidesFragment : Fragment() {
 
                 if (ride.isScheduled && ride.status == "scheduled") {
                     binding.startRouteBtn.visibility = View.GONE
-                    binding.arrivedBtn.visibility = View.GONE
                     binding.leaveRideBtn.visibility = View.GONE
                     binding.cancelRideBtn.visibility = View.VISIBLE
                     binding.liveText.visibility = View.GONE
                     binding.liveIndicator.visibility = View.GONE
                 } else {
+                    binding.startRouteBtn.visibility = View.VISIBLE
                     if (isRideCreator) {
-                        binding.startRouteBtn.visibility = View.VISIBLE
-                        binding.arrivedBtn.visibility = View.VISIBLE
                         binding.leaveRideBtn.visibility = View.GONE
                         binding.cancelRideBtn.visibility = View.VISIBLE
                     } else {
-                        binding.startRouteBtn.visibility = View.VISIBLE
-                        binding.arrivedBtn.visibility = View.VISIBLE
                         binding.leaveRideBtn.visibility = View.VISIBLE
                         binding.cancelRideBtn.visibility = View.GONE
                     }
                 }
 
-                // Auto-check for arrival
-                locationViewModel.lastKnownLocation.observe(viewLifecycleOwner) { currentLatLng ->
-                    if (currentLatLng != null && ride.status != "scheduled") {
+                locationObserver?.let {
+                    locationViewModel.lastKnownLocation.removeObserver(it)
+                }
+
+                locationObserver = Observer { lastKnownLatLng ->
+                    if (lastKnownLatLng != null && ride.status != "scheduled" && !hasArrived && ride.status != "completed") {
                         val destLat = ride.destinationCoordinates?.get("latitude") ?: 0.0
                         val destLng = ride.destinationCoordinates?.get("longitude") ?: 0.0
 
-                        val results = FloatArray(1)
-                        Location.distanceBetween(
-                            currentLatLng.latitude, currentLatLng.longitude,
-                            destLat, destLng, results
-                        )
+                        val currentLocationForDistance = Location("").apply {
+                            latitude = lastKnownLatLng.latitude
+                            longitude = lastKnownLatLng.longitude
+                        }
+                        val destinationLocationForDistance = Location("").apply {
+                            latitude = destLat
+                            longitude = destLng
+                        }
 
-                        val distanceInMeters = results[0]
-                        if (distanceInMeters < 100) {
-                            binding.arrivedBtn.isEnabled = true
-                            binding.arrivedBtn.alpha = 1.0f
-                        } else {
-                            binding.arrivedBtn.isEnabled = false
-                            binding.arrivedBtn.alpha = 0.5f
+                        val distanceInMeters = currentLocationForDistance.distanceTo(destinationLocationForDistance)
+
+                        if (distanceInMeters < 50) {
+                            completeRide(ride, isRideCreator)
+                            hasArrived = true
+                            locationObserver?.let {
+                                locationViewModel.lastKnownLocation.removeObserver(it)
+                            }
                         }
                     }
                 }
+                locationViewModel.lastKnownLocation.observe(viewLifecycleOwner, locationObserver!!)
 
                 binding.startRouteBtn.setOnClickListener {
-                    val destLat = ride.destinationCoordinates?.get("latitude")
-                    val destLng = ride.destinationCoordinates?.get("longitude")
-
-                    if (destLat != null && destLng != null) {
-                        val gmmIntentUri = Uri.parse("google.navigation:q=$destLat,$destLng")
-                        val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
-                        mapIntent.setPackage("com.google.android.apps.maps")
-
-                        if (context?.packageManager?.let { mapIntent.resolveActivity(it) } != null) {
-                            startActivity(mapIntent)
-                        } else {
-                            Toast.makeText(requireContext(), "Google Maps is not installed", Toast.LENGTH_SHORT).show()
+                    if (ride.sharedRoutesId != null) {
+                        val intent = Intent(requireContext(), InAppNavigationActivity::class.java).apply {
+                            putExtra("EXTRA_RIDE", ride)
                         }
+                        startActivity(intent)
+                    } else {
+                        Toast.makeText(requireContext(), "Cannot start navigation: Ride ID is missing.", Toast.LENGTH_SHORT).show()
                     }
-                }
-
-                binding.arrivedBtn.setOnClickListener {
-                    showArrivalConfirmationDialog(ride, isRideCreator)
                 }
 
                 binding.leaveRideBtn.setOnClickListener {
@@ -356,17 +353,6 @@ class MyRidesFragment : Fragment() {
                 }
             }
 
-            private fun showArrivalConfirmationDialog(ride: SharedRide, isRideCreator: Boolean) {
-                MaterialAlertDialogBuilder(requireContext())
-                    .setTitle("Complete Ride")
-                    .setMessage("Are you sure you have arrived and want to complete this ride?")
-                    .setPositiveButton("Arrived") { _, _ ->
-                        completeRide(ride, isRideCreator)
-                    }
-                    .setNegativeButton("Cancel", null)
-                    .show()
-            }
-
             private fun showLeaveConfirmationDialog(ride: SharedRide) {
                 MaterialAlertDialogBuilder(requireContext())
                     .setTitle("Leave Ride")
@@ -424,8 +410,36 @@ class MyRidesFragment : Fragment() {
                         firestore.collection("sharedRoutes").document(rideId)
                             .update("joinedRiders.$userId", com.google.firebase.firestore.FieldValue.delete())
                     }
+
+                    val arrivalNotifRef = firestore.collection("users").document(userId).collection("notifications").document()
+                    batch.set(arrivalNotifRef, mapOf(
+                        "actorId" to userId,
+                        "createdAt" to Timestamp.now(),
+                        "message" to "You have arrived at your destination for the ride to ${ride.destination}.",
+                        "type" to "ride_arrived",
+                        "isRead" to false
+                    ))
+
+                    if (isRideCreator) {
+                        ride.joinedRiders?.keys?.forEach { riderId ->
+                            val notifRef = firestore.collection("users").document(riderId).collection("notifications").document()
+                            firestore.collection("users").document(userId).get()
+                                .addOnSuccessListener { userDoc ->
+                                    val user = userDoc.toObject<User>()
+                                    val creatorName = "${user?.firstName} ${user?.lastName}"
+                                    notifRef.set(mapOf(
+                                        "actorId" to userId,
+                                        "createdAt" to Timestamp.now(),
+                                        "message" to "$creatorName has arrived at the destination for the ride to ${ride.destination}.",
+                                        "type" to "ride_completed_by_creator",
+                                        "isRead" to false
+                                    ))
+                                }
+                        }
+                    }
+
                 }.addOnFailureListener { e ->
-                    Log.e(TAG, "Error: ${e.message}")
+                    Log.e(TAG, "Error completing ride: ${e.message}")
                 }
             }
 
@@ -460,7 +474,6 @@ class MyRidesFragment : Fragment() {
                     transaction.update(rideRef, "status", "cancelled")
                     transaction.update(firestore.collection("users").document(userId), "currentJoinedRide", null)
 
-                    // Log cancelled ride to history for the creator
                     val cancelledRideHistory = RideHistory(
                         datetime = Timestamp.now(),
                         destination = ride.destination,

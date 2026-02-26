@@ -296,21 +296,6 @@
                 app:iconSize="16dp"
                 app:iconPadding="4dp" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/arrived_btn"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:backgroundTint="@color/blue"
-                android:contentDescription="Arrived"
-                android:text="Arrived"
-                android:textSize="12sp"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp"
-                android:visibility="gone"
-                app:icon="@drawable/ic_checkmark"
-                app:iconSize="16dp"
-                app:iconPadding="4dp" />
-
         </LinearLayout>
 
     </androidx.constraintlayout.widget.ConstraintLayout>

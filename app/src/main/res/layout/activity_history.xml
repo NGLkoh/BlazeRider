@@ -17,7 +17,7 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             android:background="@android:color/white"
-            app:navigationIcon="?attr/homeAsUpIndicator"
+            app:navigationIcon="@drawable/ic_chevron_left"
             app:title="History"
             app:titleTextColor="@android:color/black">
 

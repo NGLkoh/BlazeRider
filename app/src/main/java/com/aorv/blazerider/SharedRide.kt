@@ -1,7 +1,11 @@
 package com.aorv.blazerider
 
+import android.os.Parcelable
 import com.google.firebase.Timestamp
+import kotlinx.parcelize.Parcelize
+import kotlinx.parcelize.RawValue
 
+@Parcelize
 data class SharedRide(
     val datetime: Timestamp? = null,
     val createdAt: Timestamp? = null, // The time the ride was "posted" or scheduled to be published
@@ -12,9 +16,9 @@ data class SharedRide(
     val origin: String? = null,
     val originCoordinates: Map<String, Double>? = null,
     val userUid: String? = null,
-    val joinedRiders: Map<String, Map<String, Any>>? = null,
+    val joinedRiders: Map<String, Map<String, @RawValue Any>>? = null,
     val sharedRoutesId: String? = null,
     val status: String? = null,
     val isAdminEvent: Boolean = false,
     val isScheduled: Boolean = false // Added to handle visibility of scheduled admin events
-)
+) : Parcelable
