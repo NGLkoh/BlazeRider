@@ -30,6 +30,10 @@ class EventsFragment : Fragment() {
     private lateinit var calendarView: MaterialCalendarView
     private lateinit var postAdapter: PostAdapter
     private lateinit var userProfileImage: ShapeableImageView
+    
+    // UI elements to hide on past dates
+    private lateinit var btnCreateRideEvent: View
+    private lateinit var layoutPostRow: View
 
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
@@ -69,11 +73,13 @@ class EventsFragment : Fragment() {
         calendarView = view.findViewById(R.id.calendar_view)
         recyclerView = view.findViewById(R.id.feed_recycler_view)
         userProfileImage = view.findViewById(R.id.user_image)
+        
+        btnCreateRideEvent = view.findViewById(R.id.btn_create_ride_event)
+        layoutPostRow = view.findViewById(R.id.layout_post_row)
 
         val whatsOnMindButton = view.findViewById<View>(R.id.btn_whats_on_mind)
         val addImageButton = view.findViewById<View>(R.id.btn_add_image)
         val scheduleEventButton = view.findViewById<View>(R.id.btn_schedule_event)
-        val createRideButton = view.findViewById<View>(R.id.btn_create_ride_event)
 
         postAdapter = PostAdapter(
             onDeletePost = { post -> deletePost(post) },
@@ -97,6 +103,9 @@ class EventsFragment : Fragment() {
                 calendar.set(date.year, date.month - 1, date.day)
                 currentSelectedTimestamp = calendar.timeInMillis
 
+                // Check if selected date is in the past
+                updatePostingVisibility(date)
+
                 calendar.set(Calendar.HOUR_OF_DAY, 0)
                 calendar.set(Calendar.MINUTE, 0)
                 calendar.set(Calendar.SECOND, 0)
@@ -113,6 +122,7 @@ class EventsFragment : Fragment() {
         }
 
         calendarView.setDateSelected(CalendarDay.today(), true)
+        updatePostingVisibility(CalendarDay.today())
 
         val openPostNow = View.OnClickListener {
             val intent = Intent(requireContext(), PostActivity::class.java).apply {
@@ -142,12 +152,25 @@ class EventsFragment : Fragment() {
             }, currentHour, currentMinute, false).show()
         }
 
-        createRideButton.setOnClickListener {
+        btnCreateRideEvent.setOnClickListener {
             val intent = Intent(requireContext(), CreateRideActivity::class.java)
             postLauncher.launch(intent)
         }
 
         loadTodaysPosts()
+    }
+
+    private fun updatePostingVisibility(selectedDate: CalendarDay) {
+        val today = CalendarDay.today()
+        
+        // Hide posting UI if selected date is strictly before today
+        if (selectedDate.isBefore(today)) {
+            btnCreateRideEvent.visibility = View.GONE
+            layoutPostRow.visibility = View.GONE
+        } else {
+            btnCreateRideEvent.visibility = View.VISIBLE
+            layoutPostRow.visibility = View.VISIBLE
+        }
     }
 
     private fun loadEventDots() {

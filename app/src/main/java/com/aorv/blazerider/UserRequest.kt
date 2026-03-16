@@ -11,19 +11,17 @@ data class UserRequest(
     var barangay: String? = null,
     var city: String? = null,
     var province: String? = null,
-    var birthdate: Timestamp? = null,
+    var birthdate: Any? = null, // Changed to Any? to handle both String and Timestamp from Firestore
     var gender: String? = null,
     var lastActive: Timestamp? = null,
     var profileImageUrl: String? = null,
     var fcmToken: String? = null,
     var state: String? = null,
-    var currentJoinedRide: Any? = null, // Using Any? for null in Firestore
-    var location: Any? = null, // Using Any? for geopoint
+    var currentJoinedRide: Any? = null,
+    var location: Any? = null,
     var isVerified: Boolean = false,
     var isAdmin: Boolean = false,
     var isVerifiedRecent: Boolean = false,
-
-    // --- NEW FIELDS ADDED HERE ---
     var deactivated: Boolean = false,
     var deactivationReason: String? = null
 
@@ -49,8 +47,6 @@ data class UserRequest(
         isVerified = false,
         isAdmin = false,
         isVerifiedRecent = false,
-
-        // Initialize new fields
         deactivated = false,
         deactivationReason = null
     )

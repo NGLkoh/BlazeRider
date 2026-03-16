@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.aorv.blazerider.databinding.ActivityHistoryBinding
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -25,12 +26,15 @@ class HistoryActivity : AppCompatActivity() {
         binding = ActivityHistoryBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        setSupportActionBar(binding.toolbar)
-        supportActionBar?.setDisplayHomeAsUpEnabled(true)
-
+        // Using the toolbar directly instead of setSupportActionBar to avoid event conflicts
         binding.toolbar.setNavigationOnClickListener {
             onBackPressedDispatcher.onBackPressed()
         }
+
+        binding.clearAllButton.setOnClickListener {
+            showClearHistoryConfirmation()
+        }
+
         setupRecyclerView()
         setupFirestoreListener()
     }
@@ -57,6 +61,7 @@ class HistoryActivity : AppCompatActivity() {
         db.collection("users").document(currentUserUid).collection("rideHistory")
             .orderBy("datetime", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, e ->
+                if (isFinishing || isDestroyed) return@addSnapshotListener
                 binding.progressBar.visibility = View.GONE
 
                 if (e != null) {
@@ -75,38 +80,68 @@ class HistoryActivity : AppCompatActivity() {
 
                     binding.historyRecyclerView.visibility = View.VISIBLE
                     binding.noHistoryText.visibility = View.GONE
+                    binding.clearAllButton.visibility = View.VISIBLE
                 } else {
                     historyList.clear()
                     historyAdapter.notifyDataSetChanged()
                     binding.historyRecyclerView.visibility = View.GONE
                     binding.noHistoryText.visibility = View.VISIBLE
+                    binding.clearAllButton.visibility = View.GONE
                     Log.d("HistoryActivity", "Current data: null or empty")
                 }
             }
     }
 
-    private fun clearAllHistory() {
-        val currentUserUid = auth.currentUser?.uid ?: return
+    private fun showClearHistoryConfirmation() {
         if (historyList.isEmpty()) {
-            Toast.makeText(this, "History is already empty.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "No history to clear.", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val batch = db.batch()
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Clear History")
+            .setMessage("Are you sure you want to delete all your ride history? This action cannot be undone.")
+            .setPositiveButton("Clear All") { _, _ ->
+                clearAllHistory()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun clearAllHistory() {
+        val currentUserUid = auth.currentUser?.uid ?: return
+        
+        binding.progressBar.visibility = View.VISIBLE
+        
         val rideHistoryRef = db.collection("users").document(currentUserUid).collection("rideHistory")
+        
+        rideHistoryRef.get().addOnSuccessListener { snapshot ->
+            if (snapshot.isEmpty) {
+                binding.progressBar.visibility = View.GONE
+                Toast.makeText(this, "History is already empty.", Toast.LENGTH_SHORT).show()
+                return@addOnSuccessListener
+            }
 
-        for (ride in historyList) {
-            batch.delete(rideHistoryRef.document(ride.documentId))
+            val batch = db.batch()
+            for (doc in snapshot.documents) {
+                batch.delete(doc.reference)
+            }
+
+            batch.commit()
+                .addOnSuccessListener {
+                    binding.progressBar.visibility = View.GONE
+                    Log.d("HistoryActivity", "All history successfully deleted.")
+                    Toast.makeText(this, "History cleared", Toast.LENGTH_SHORT).show()
+                }
+                .addOnFailureListener { e ->
+                    binding.progressBar.visibility = View.GONE
+                    Log.w("HistoryActivity", "Error deleting history.", e)
+                    Toast.makeText(this, "Failed to clear history.", Toast.LENGTH_SHORT).show()
+                }
+        }.addOnFailureListener { e ->
+            binding.progressBar.visibility = View.GONE
+            Log.e("HistoryActivity", "Error fetching history for deletion", e)
+            Toast.makeText(this, "Failed to access history.", Toast.LENGTH_SHORT).show()
         }
-
-        batch.commit()
-            .addOnSuccessListener {
-                Log.d("HistoryActivity", "All history successfully deleted.")
-                Toast.makeText(this, "History cleared", Toast.LENGTH_SHORT).show()
-            }
-            .addOnFailureListener { e ->
-                Log.w("HistoryActivity", "Error deleting history.", e)
-                Toast.makeText(this, "Failed to clear history.", Toast.LENGTH_SHORT).show()
-            }
     }
 }

@@ -138,12 +138,15 @@ class MainActivity : AppCompatActivity() {
                     } else {
                         Log.w(TAG, "User document not found in Firestore, creating document")
                         createUserDocument(currentUser.uid, currentUser.email, currentUser.displayName)
-                        startActivity(Intent(this, MainMenuActivity::class.java))
+                        // Redirect to the first onboarding step instead of MainMenuActivity to avoid an infinite loop
+                        startActivity(Intent(this, EmailVerificationActivity::class.java))
                     }
                     finish() // Finish MainActivity immediately after routing
                 }
                 .addOnFailureListener { exception ->
                     Log.e(TAG, "Failed to fetch Firestore user data: ${exception.message}")
+                    // To avoid an infinite loop with MainMenuActivity, sign out before redirecting if check fails
+                    auth.signOut()
                     startActivity(Intent(this, MainMenuActivity::class.java))
                     finish()
                 }

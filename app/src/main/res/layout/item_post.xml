@@ -175,7 +175,7 @@
         <LinearLayout
             android:id="@+id/ride_controls_container"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="48dp"
             android:layout_marginTop="16dp"
             android:orientation="horizontal"
             android:visibility="gone"
@@ -187,40 +187,34 @@
                 android:id="@+id/btnPostStartRoute"
                 style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="match_parent"
                 android:layout_weight="1"
                 android:layout_marginEnd="4dp"
-                android:text="Start"
+                android:text="Start Route"
                 android:textSize="12sp"
+                android:textAllCaps="false"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
                 app:icon="@drawable/ic_route"
                 app:iconSize="16dp"
+                app:iconGravity="textStart"
                 android:backgroundTint="@color/green" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnPostArrived"
-                style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginHorizontal="4dp"
-                android:text="Arrived"
-                android:textSize="12sp"
-                android:visibility="gone"
-                app:icon="@drawable/ic_checkmark"
-                app:iconSize="16dp"
-                android:backgroundTint="@color/blue" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnPostCancel"
                 style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="match_parent"
                 android:layout_weight="1"
                 android:layout_marginStart="4dp"
                 android:text="Cancel"
                 android:textSize="12sp"
+                android:textAllCaps="false"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
                 app:icon="@drawable/ic_close"
                 app:iconSize="16dp"
+                app:iconGravity="textStart"
                 android:backgroundTint="@color/quit" />
         </LinearLayout>
 

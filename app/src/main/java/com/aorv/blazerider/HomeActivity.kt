@@ -120,6 +120,12 @@ class HomeActivity : AppCompatActivity() {
                 false
             } else {
                 lastClickTime = currentTime
+                
+                // Prevent reloading the same fragment if it's already selected
+                if (bottomNav.selectedItemId == item.itemId) {
+                    return@setOnItemSelectedListener true
+                }
+
                 when (item.itemId) {
                     R.id.nav_location -> { replaceFragment(LocationFragment()); updateOnlineStatus(); true }
                     R.id.nav_announcements -> {
@@ -131,7 +137,7 @@ class HomeActivity : AppCompatActivity() {
                     R.id.nav_home -> { replaceFragment(FeedFragment()); updateOnlineStatus(); true }
                     R.id.nav_shared_rides -> {
                         startActivity(Intent(this, SharedRidesActivity::class.java))
-                        true
+                        false
                     }
                     R.id.nav_hamburger -> { replaceFragment(MoreFragment()); updateOnlineStatus(); true }
                     else -> false
@@ -154,6 +160,9 @@ class HomeActivity : AppCompatActivity() {
         listenForNotifications()
         listenForAnnouncements()
         listenForNewMessages()
+        
+        // Setup initial online status update
+        updateOnlineStatus()
     }
 
     private fun listenForNotifications() {
@@ -169,7 +178,6 @@ class HomeActivity : AppCompatActivity() {
                 val entityId = doc.getString("entityId")
                 val isRead = doc.getBoolean("isRead") ?: true
 
-                // Corrected: Removed ::binding check because this activity uses findViewById
                 if (!isRead) {
                     val title = doc.getString("title") ?: "New Notification"
                     val message = doc.getString("message") ?: ""
@@ -238,14 +246,12 @@ class HomeActivity : AppCompatActivity() {
 
             mainHandler.removeCallbacksAndMessages("banner_timeout")
 
-// Create the runnable for hiding the banner
             val hideBannerRunnable = Runnable {
                 if (!isFinishing && !isDestroyed) {
                     notificationBanner.visibility = View.GONE
                 }
             }
 
-// Use postAtTime with the token to allow for cancellation
             mainHandler.postAtTime(
                 hideBannerRunnable,
                 "banner_timeout",
@@ -266,17 +272,26 @@ class HomeActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        updateOnlineStatus()
-        // Register receiver to catch in-app banner notifications from background FCM messages
+        syncBottomNavSelection()
         LocalBroadcastManager.getInstance(this).registerReceiver(
             messageBroadcastReceiver,
             IntentFilter(MyFirebaseMessagingService.NEW_MESSAGE_ACTION)
         )
     }
 
+    private fun syncBottomNavSelection() {
+        val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_navigation)
+        val fragment = supportFragmentManager.findFragmentById(R.id.fragment_container)
+        when (fragment) {
+            is LocationFragment -> bottomNav.selectedItemId = R.id.nav_location
+            is AnnouncementsFragment -> bottomNav.selectedItemId = R.id.nav_announcements
+            is FeedFragment -> bottomNav.selectedItemId = R.id.nav_home
+            is MoreFragment -> bottomNav.selectedItemId = R.id.nav_hamburger
+        }
+    }
+
     override fun onPause() {
         super.onPause()
-        // Unregister receiver
         LocalBroadcastManager.getInstance(this).unregisterReceiver(messageBroadcastReceiver)
 
         val userId = auth.currentUser?.uid ?: return
@@ -348,7 +363,6 @@ class HomeActivity : AppCompatActivity() {
                     val unreadCount = snapshot?.documents?.count { doc ->
                         val isScheduled = doc.getBoolean("isScheduled") ?: false
                         val createdAt = doc.getTimestamp("createdAt")?.toDate()
-                        // Count if it's NOT scheduled, OR if it IS scheduled and the time has passed.
                         !isScheduled || (createdAt != null && createdAt.before(now))
                     } ?: 0
 
@@ -367,6 +381,10 @@ class HomeActivity : AppCompatActivity() {
     
     private fun updateOnlineStatus() {
         val userId = auth.currentUser?.uid ?: return
+        // Use a single observer by removing existing ones if necessary, 
+        // or just rely on the LiveData properly without repeated observation registrations.
+        // For simplicity, we'll just register it once in onCreate or properly manage it.
+        locationViewModel.lastKnownLocation.removeObservers(this)
         locationViewModel.lastKnownLocation.observe(this) { location ->
             val statusData = mapOf(
                 "state" to "online",

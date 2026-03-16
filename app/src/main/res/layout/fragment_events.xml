@@ -85,6 +85,7 @@
                     app:iconTint="@android:color/white" />
 
                 <LinearLayout
+                    android:id="@+id/layout_post_row"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center_vertical"

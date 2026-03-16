@@ -61,7 +61,14 @@ class SharedRidesFragment : Fragment() {
                 
                 val rides: List<SharedRide> = snapshot?.documents?.mapNotNull { doc ->
                     try {
-                        doc.toObject<SharedRide>()?.copy(sharedRoutesId = doc.id)
+                        val ride = doc.toObject<SharedRide>()?.copy(sharedRoutesId = doc.id)
+                        
+                        // Extract isPublic directly from the document to avoid mapping issues
+                        val isPublicDoc = doc.getBoolean("isPublic") ?: true
+                        
+                        // We filter here, but we can also store it in the ride object
+                        // To be safe, we return the ride only if it's public
+                        if (isPublicDoc) ride else null
                     } catch (e: Exception) {
                         Log.e(TAG, "Exception parsing document ${doc.id}: ${e.message}")
                         null
@@ -72,6 +79,7 @@ class SharedRidesFragment : Fragment() {
                 val visibleRides = rides.filter { ride ->
                     val isStatusActive = ride.status != "completed" && ride.status != "cancelled"
                     val isVisible = !ride.isScheduled || (ride.createdAt != null && ride.createdAt.seconds <= now.seconds)
+                    
                     isStatusActive && isVisible
                 }
                 

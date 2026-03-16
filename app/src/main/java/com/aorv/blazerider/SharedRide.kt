@@ -20,5 +20,6 @@ data class SharedRide(
     val sharedRoutesId: String? = null,
     val status: String? = null,
     val isAdminEvent: Boolean = false,
-    val isScheduled: Boolean = false // Added to handle visibility of scheduled admin events
+    val isScheduled: Boolean = false, // Added to handle visibility of scheduled admin events
+    val isPublic: Boolean = true // Added to distinguish between started (private) and shared rides
 ) : Parcelable

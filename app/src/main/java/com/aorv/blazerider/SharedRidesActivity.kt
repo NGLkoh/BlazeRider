@@ -192,6 +192,12 @@ class SharedRidesActivity : AppCompatActivity() {
                     if (!currentJoinedRide.isNullOrEmpty()) {
                         val rideDoc = db.collection("sharedRoutes").document(currentJoinedRide).get().await()
                         if (rideDoc.exists() && rideDoc.getString("status") != "completed" && rideDoc.getString("status") != "cancelled") {
+                            val isPublic = rideDoc.getBoolean("isPublic") ?: true
+                            if (!isPublic) {
+                                rideBanner.isVisible = false
+                                return@launch
+                            }
+                            
                             val hostUid = rideDoc.getString("userUid") ?: ""
                             val isHost = hostUid == userId
                             
@@ -255,7 +261,7 @@ class SharedRidesActivity : AppCompatActivity() {
                         putExtra("ride_datetime", datetime)
                         putExtra("ride_destination", destination)
                         putExtra("ride_destination_lat", destinationLat)
-                        putExtra("ride_destination_lng", destinationLng)
+                        putExtra("ride_destination_lng", destinationLat)
                         putExtra("ride_distance", distance)
                         putExtra("ride_duration", duration)
                         putExtra("ride_origin", origin)

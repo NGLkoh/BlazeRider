@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -17,7 +18,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.ktx.toObject
+import com.google.firebase.firestore.DocumentSnapshot
 
 class UsersFragment : Fragment() {
 
@@ -39,6 +40,7 @@ class UsersFragment : Fragment() {
     // State management: 0 = Pending, 1 = Accepted, 2 = Deleted
     private var currentTab = 0
     private val db = FirebaseFirestore.getInstance()
+    private val TAG = "UsersFragment"
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
@@ -84,9 +86,11 @@ class UsersFragment : Fragment() {
         db.collection("users")
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    if (context != null) Toast.makeText(context, "Error loading users: ${error.message}", Toast.LENGTH_SHORT).show()
+                    if (isAdded && context != null) Toast.makeText(context, "Error loading users: ${error.message}", Toast.LENGTH_SHORT).show()
                     return@addSnapshotListener
                 }
+
+                if (!isAdded) return@addSnapshotListener
 
                 userRequestList.clear()
                 var pendingCount = 0
@@ -94,21 +98,21 @@ class UsersFragment : Fragment() {
                 var deletedCount = 0
 
                 snapshot?.documents?.forEach { doc ->
-                    val user = doc.toObject<UserRequest>()?.apply { userId = doc.id }
-
-                    if (user != null) {
+                    try {
+                        // Manually parse the document to avoid crashes due to type inconsistencies (e.g. admin field being String/Long/Boolean)
+                        val user = parseUserDocument(doc)
+                        
+                        // Extract admin status using the same robust logic as MainActivity
                         val isAdmin = when (val adminValue = doc.get("admin")) {
                             is Boolean -> adminValue
                             is String -> adminValue.toBooleanStrictOrNull() ?: false
+                            is Long -> adminValue == 1L
                             else -> false
                         }
 
-                        // FIX: Access property directly for boolean named without "is"
-                        val isDeactivated = user.deactivated
-
                         if (!isAdmin) {
                             userRequestList.add(user)
-                            if (isDeactivated) {
+                            if (user.deactivated) {
                                 deletedCount++
                             } else if (!user.isVerified) {
                                 pendingCount++
@@ -116,12 +120,40 @@ class UsersFragment : Fragment() {
                                 acceptedCount++
                             }
                         }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error parsing user document ${doc.id}: ${e.message}")
                     }
                 }
 
                 updateBadges(pendingCount, acceptedCount, deletedCount)
                 filterUsers(searchBar.text.toString())
             }
+    }
+
+    /**
+     * Robustly maps a Firestore document to a UserRequest object, handling potential type mismatches.
+     */
+    private fun parseUserDocument(doc: DocumentSnapshot): UserRequest {
+        return UserRequest().apply {
+            userId = doc.id
+            firstName = doc.getString("firstName")
+            lastName = doc.getString("lastName")
+            email = doc.getString("email")
+            gender = doc.getString("gender")
+            
+            // Handle birthdate safely (could be String or Timestamp depending on legacy data)
+            birthdate = doc.get("birthdate")?.toString() 
+            
+            // Map booleans safely
+            isVerified = doc.getBoolean("verified") ?: false
+            isVerifiedRecent = doc.getBoolean("verifiedRecent") ?: false
+            deactivated = doc.getBoolean("deactivated") ?: false
+            deactivationReason = doc.getString("deactivationReason")
+            
+            // Other fields if needed for UI
+            state = doc.getString("state")
+            profileImageUrl = doc.getString("profileImageUrl")
+        }
     }
 
     private fun confirmUser(user: UserRequest) {
@@ -134,7 +166,7 @@ class UsersFragment : Fragment() {
                 )
             )
             .addOnSuccessListener {
-                Toast.makeText(context, "User confirmed", Toast.LENGTH_SHORT).show()
+                if (isAdded && context != null) Toast.makeText(context, "User confirmed", Toast.LENGTH_SHORT).show()
             }
     }
 
@@ -161,18 +193,16 @@ class UsersFragment : Fragment() {
                 if (reason.isNotEmpty()) {
                     deactivateUser(user, reason)
                 } else {
-                    Toast.makeText(context, "Reason is required", Toast.LENGTH_SHORT).show()
+                    if (isAdded && context != null) Toast.makeText(context, "Reason is required", Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton("Cancel", null)
             .show()
     }
 
-    // --- UPDATED LOGIC TO DELETE RELATED DATA ---
     private fun deactivateUser(user: UserRequest, reason: String) {
         val userId = user.userId ?: return
 
-        // 1. Mark user as deactivated first
         db.collection("users").document(userId)
             .update(
                 mapOf(
@@ -181,26 +211,16 @@ class UsersFragment : Fragment() {
                 )
             )
             .addOnSuccessListener {
-                Toast.makeText(context, "User deactivated. Cleaning up data...", Toast.LENGTH_SHORT).show()
-
-                // 2. Delete User's Posts
+                if (isAdded && context != null) Toast.makeText(context, "User deactivated. Cleaning up data...", Toast.LENGTH_SHORT).show()
                 deleteUserCollectionData("posts", "userId", userId)
-
-                // 3. Delete User's Rides (if they created any)
-                deleteUserCollectionData("rides", "driverId", userId) // Assuming driverId links to user
-
-                // 4. Delete Chats (Optional: Deleting messages sent by them)
-                // Note: Deleting individual messages inside chats is complex and costly.
-                // Often better to keep messages but show "Deactivated User" name.
-                // If you must delete 1-on-1 chats entirely:
+                deleteUserCollectionData("rides", "driverId", userId)
                 deleteUserChats(userId)
             }
             .addOnFailureListener {
-                Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+                if (isAdded && context != null) Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
             }
     }
 
-    // Helper function to delete documents where a specific field matches the userId
     private fun deleteUserCollectionData(collectionName: String, fieldName: String, userId: String) {
         db.collection(collectionName)
             .whereEqualTo(fieldName, userId)
@@ -210,15 +230,11 @@ class UsersFragment : Fragment() {
                 for (document in snapshot.documents) {
                     batch.delete(document.reference)
                 }
-                batch.commit().addOnSuccessListener {
-                    // Log or Toast success for this collection
-                }
+                batch.commit()
             }
     }
 
     private fun deleteUserChats(userId: String) {
-        // Logic depends on your Chat structure.
-        // Example: If participants is an array [uid1, uid2]
         db.collection("chats")
             .whereArrayContains("participants", userId)
             .get()
@@ -240,23 +256,20 @@ class UsersFragment : Fragment() {
                 )
             )
             .addOnSuccessListener {
-                Toast.makeText(context, "User reactivated", Toast.LENGTH_SHORT).show()
+                if (isAdded && context != null) Toast.makeText(context, "User reactivated", Toast.LENGTH_SHORT).show()
             }
     }
 
     private fun filterUsers(query: String) {
         val filteredList = userRequestList.filter { user ->
-            // FIX: Using correct property access
-            val isDeactivated = user.deactivated
-
             val matchesStatus = when (currentTab) {
-                0 -> !user.isVerified && !isDeactivated // Pending
-                1 -> user.isVerified && !isDeactivated  // Accepted
-                2 -> isDeactivated                      // Deleted
+                0 -> !user.isVerified && !user.deactivated // Pending
+                1 -> user.isVerified && !user.deactivated  // Accepted
+                2 -> user.deactivated                      // Deleted
                 else -> false
             }
 
-            val fullName = "${user.firstName} ${user.lastName}".lowercase()
+            val fullName = "${user.firstName.orEmpty()} ${user.lastName.orEmpty()}".lowercase()
             val matchesSearch = query.isEmpty() || fullName.contains(query.lowercase())
             matchesStatus && matchesSearch
         }

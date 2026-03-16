@@ -73,7 +73,6 @@ class PostAdapter(
 
         private val rideControlsContainer = itemView.findViewById<LinearLayout>(R.id.ride_controls_container)
         private val btnStartRoute = itemView.findViewById<MaterialButton>(R.id.btnPostStartRoute)
-        private val btnArrived = itemView.findViewById<MaterialButton>(R.id.btnPostArrived)
         private val btnCancel = itemView.findViewById<MaterialButton>(R.id.btnPostCancel)
 
         private val db = FirebaseFirestore.getInstance()
@@ -353,22 +352,19 @@ class PostAdapter(
                     }
                     rideControlsContainer.visibility = View.VISIBLE
                     if (status == "ongoing") {
-                        btnArrived.visibility = View.VISIBLE
                         btnStartRoute.text = "Continue Route"
                     } else {
-                        btnArrived.visibility = View.GONE
                         btnStartRoute.text = "Start Route"
                     }
                     btnStartRoute.setOnClickListener {
+                        val ride = snapshot.toObject(SharedRide::class.java)?.copy(sharedRoutesId = snapshot.id)
                         if (status != "ongoing") {
                             db.collection("sharedRoutes").document(post.sharedRouteId).update("status", "ongoing")
                         }
-                        openNavigation(snapshot.get("destinationCoordinates") as? Map<String, Double>)
-                    }
-                    btnArrived.setOnClickListener {
-                        showConfirmation("Arrived", "Have you reached the destination?") {
-                            db.collection("sharedRoutes").document(post.sharedRouteId).update("status", "completed")
+                        val intent = Intent(itemView.context, InAppNavigationActivity::class.java).apply {
+                            putExtra("EXTRA_RIDE", ride)
                         }
+                        itemView.context.startActivity(intent)
                     }
                     btnCancel.setOnClickListener {
                         showConfirmation("Cancel Ride", "Are you sure you want to cancel this ride event?") {
@@ -376,15 +372,6 @@ class PostAdapter(
                         }
                     }
                 }
-        }
-
-        private fun openNavigation(coords: Map<String, Double>?) {
-            val lat = coords?.get("latitude") ?: return
-            val lng = coords["longitude"] ?: return
-            val uri = Uri.parse("google.navigation:q=$lat,$lng")
-            val intent = Intent(Intent.ACTION_VIEW, uri)
-            intent.setPackage("com.google.android.apps.maps")
-            itemView.context.startActivity(intent)
         }
 
         private fun showConfirmation(title: String, message: String, onConfirm: () -> Unit) {

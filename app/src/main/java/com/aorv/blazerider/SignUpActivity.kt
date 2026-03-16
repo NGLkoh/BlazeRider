@@ -61,6 +61,8 @@ class SignUpActivity : AppCompatActivity() {
         // Birthdate picker
         birthdate.setOnClickListener {
             val calendar = Calendar.getInstance()
+            // Set default date to exactly 18 years ago from today
+            calendar.add(Calendar.YEAR, -18)
             val year = calendar.get(Calendar.YEAR)
             val month = calendar.get(Calendar.MONTH)
             val day = calendar.get(Calendar.DAY_OF_MONTH)
@@ -74,7 +76,12 @@ class SignUpActivity : AppCompatActivity() {
                 },
                 year, month, day
             )
-            datePicker.datePicker.maxDate = System.currentTimeMillis()
+            
+            // Limit selection to users 18 years or older by setting maxDate
+            val maxCalendar = Calendar.getInstance()
+            maxCalendar.add(Calendar.YEAR, -18)
+            datePicker.datePicker.maxDate = maxCalendar.timeInMillis
+            
             datePicker.show()
         }
 

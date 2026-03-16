@@ -218,13 +218,7 @@ class DashboardFragment : Fragment() {
             originalCal.add(calendarField, 1)
         }
 
-        if (entries.all { it.y == 0f }) {
-            lineChart.clear()
-            lineChart.setNoDataText("No chart data available for the selected period.")
-            lineChart.invalidate()
-            return
-        }
-
+        // Show a flat chart even if all entries are zero
         val dataSet = LineDataSet(entries, "Registered & Verified Users")
         dataSet.mode = LineDataSet.Mode.CUBIC_BEZIER
         dataSet.cubicIntensity = 0.2f
@@ -262,6 +256,12 @@ class DashboardFragment : Fragment() {
         }
         lineChart.axisLeft.apply {
             axisMinimum = 0f
+            // If all values are 0, set an explicit maximum so the chart doesn't look weird
+            if (entries.all { it.y == 0f }) {
+                axisMaximum = 5f 
+            } else {
+                resetAxisMaximum()
+            }
             granularity = 1f
             setDrawGridLines(false)
         }

@@ -60,7 +60,7 @@
         <activity android:name=".CurrentAddressActivity" />
         <activity android:name=".AdminApprovalActivity" />
         <activity android:name=".SearchActivity"
-            android:theme="@style/AppTheme"
+            android:theme="@style/Theme.SearchTransparent"
             />
         <activity android:name=".ProfileMenuActivity"
             android:theme="@style/AppTheme"

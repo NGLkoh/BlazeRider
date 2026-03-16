@@ -101,8 +101,12 @@ class CreateRideActivity : AppCompatActivity() {
 
     private fun setupListeners() {
         // RIDE Date & Time
-        findViewById<Button>(R.id.btnRideDate).setOnClickListener { showDatePicker(rideCalendar) { updateRideDateTimeDisplay() } }
-        findViewById<Button>(R.id.btnRideTime).setOnClickListener { showTimePicker(rideCalendar) { updateRideDateTimeDisplay() } }
+        findViewById<Button>(R.id.btnRideDate).setOnClickListener { 
+            showDatePicker(rideCalendar, setMinDate = true) { updateRideDateTimeDisplay() } 
+        }
+        findViewById<Button>(R.id.btnRideTime).setOnClickListener { 
+            showTimePicker(rideCalendar) { updateRideDateTimeDisplay() } 
+        }
 
         // Locations
         findViewById<MaterialCardView>(R.id.cardStartLocation).setOnClickListener { launchPlaceSearch(startLocationLauncher) }
@@ -119,7 +123,7 @@ class CreateRideActivity : AppCompatActivity() {
 
         // SCHEDULE Date & Time
         findViewById<Button>(R.id.btnScheduleDate).setOnClickListener {
-            showDatePicker(scheduledCalendar) {
+            showDatePicker(scheduledCalendar, setMinDate = true) {
                 showTimePicker(scheduledCalendar) {
                     isScheduleDateSet = true
                     val format = SimpleDateFormat("MMM dd, yyyy 'at' hh:mm a", Locale.getDefault())
@@ -129,7 +133,7 @@ class CreateRideActivity : AppCompatActivity() {
         }
 
         // CREATE BUTTON
-        findViewById<Button>(R.id.btnCreateEvent).setOnClickListener { validateAndCreateRide() }
+        findViewById<Button>(R.id.btnCreateEvent).setOnClickListener { checkExistingRideAndCreate() }
     }
 
     private fun launchPlaceSearch(launcher: androidx.activity.result.ActivityResultLauncher<android.content.Intent>) {
@@ -139,11 +143,18 @@ class CreateRideActivity : AppCompatActivity() {
         launcher.launch(intent)
     }
 
-    private fun showDatePicker(calendar: Calendar, onSet: () -> Unit) {
-        DatePickerDialog(this, { _, year, month, day ->
+    private fun showDatePicker(calendar: Calendar, setMinDate: Boolean = false, onSet: () -> Unit) {
+        val datePickerDialog = DatePickerDialog(this, { _, year, month, day ->
             calendar.set(year, month, day)
             onSet()
-        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show()
+        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH))
+        
+        if (setMinDate) {
+            // Set the minimum date to today to prevent selecting previous dates
+            datePickerDialog.datePicker.minDate = System.currentTimeMillis() - 1000
+        }
+        
+        datePickerDialog.show()
     }
 
     private fun showTimePicker(calendar: Calendar, onSet: () -> Unit) {
@@ -181,6 +192,37 @@ class CreateRideActivity : AppCompatActivity() {
         return hours * 3600 // Convert hours to seconds
     }
 
+    private fun checkExistingRideAndCreate() {
+        val userId = auth.currentUser?.uid ?: return
+        db.collection("users").document(userId).get()
+            .addOnSuccessListener { document ->
+                val currentJoinedRide = document.getString("currentJoinedRide")
+                if (!currentJoinedRide.isNullOrEmpty()) {
+                    Toast.makeText(this, "You already have an active ride. Finish it first.", Toast.LENGTH_SHORT).show()
+                } else {
+                    // Check for scheduled rides as well
+                    db.collection("rides")
+                        .whereEqualTo("hostId", userId)
+                        .whereEqualTo("isScheduled", true)
+                        .get()
+                        .addOnSuccessListener { scheduledSnapshot ->
+                            if (!scheduledSnapshot.isEmpty) {
+                                Toast.makeText(this, "You have a scheduled ride. Cancel or complete it first.", Toast.LENGTH_SHORT).show()
+                            } else {
+                                validateAndCreateRide()
+                            }
+                        }
+                        .addOnFailureListener {
+                            validateAndCreateRide()
+                        }
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e("CreateRideActivity", "Error checking existing ride", e)
+                validateAndCreateRide()
+            }
+    }
+
     private fun validateAndCreateRide() {
         val name = etRideName.text.toString().trim()
         val desc = etDescription.text.toString().trim()
@@ -194,6 +236,13 @@ class CreateRideActivity : AppCompatActivity() {
             Toast.makeText(this, "Please select ride date and time", Toast.LENGTH_SHORT).show()
             return
         }
+
+        // Validate that the selected ride date is not in the past
+        if (rideCalendar.timeInMillis < System.currentTimeMillis()) {
+            Toast.makeText(this, "Ride date and time cannot be in the past", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         if (startPlace == null || endPlace == null) {
             Toast.makeText(this, "Please select Start and End locations", Toast.LENGTH_SHORT).show()
             return
@@ -203,6 +252,12 @@ class CreateRideActivity : AppCompatActivity() {
         val isScheduled = rbPostLater.isChecked
         if (isScheduled && !isScheduleDateSet) {
             Toast.makeText(this, "Please select a date to auto-post", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Validate scheduled post time
+        if (isScheduled && scheduledCalendar.timeInMillis < System.currentTimeMillis()) {
+            Toast.makeText(this, "Scheduled post time cannot be in the past", Toast.LENGTH_SHORT).show()
             return
         }
 
