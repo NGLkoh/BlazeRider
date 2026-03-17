@@ -1,7 +1,9 @@
 package com.aorv.blazerider
 
+import android.app.Activity
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.view.View
@@ -18,9 +20,6 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.libraries.places.api.Places
-import com.google.android.libraries.places.api.model.Place
-import com.google.android.libraries.places.widget.Autocomplete
-import com.google.android.libraries.places.widget.model.AutocompleteActivityMode
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.Timestamp
@@ -46,8 +45,11 @@ class CreateRideActivity : AppCompatActivity() {
     // Data Holders
     private var rideCalendar = Calendar.getInstance()
     private var scheduledCalendar = Calendar.getInstance()
-    private var startPlace: Place? = null
-    private var endPlace: Place? = null
+    
+    // Custom Place class to hold data from SearchActivity
+    data class CustomPlace(val name: String, val address: String, val latLng: LatLng)
+    private var startPlace: CustomPlace? = null
+    private var endPlace: CustomPlace? = null
 
     // Flags to check if user actually picked a date
     private var isRideDateSet = false
@@ -57,21 +59,31 @@ class CreateRideActivity : AppCompatActivity() {
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
 
-    // 1. Start Location Launcher
+    // 1. Start Location Launcher using custom SearchActivity
     private val startLocationLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == RESULT_OK) {
-            val place = Autocomplete.getPlaceFromIntent(result.data!!)
-            startPlace = place
-            tvStartLocation.text = place.name
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            val name = data?.getStringExtra("SEARCH_QUERY") ?: ""
+            val address = data?.getStringExtra("PLACE_ADDRESS") ?: ""
+            val lat = data?.getDoubleExtra("PLACE_LAT", 0.0) ?: 0.0
+            val lng = data?.getDoubleExtra("PLACE_LNG", 0.0) ?: 0.0
+            
+            startPlace = CustomPlace(name, address, LatLng(lat, lng))
+            tvStartLocation.text = name
         }
     }
 
-    // 2. End Location Launcher
+    // 2. End Location Launcher using custom SearchActivity
     private val endLocationLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == RESULT_OK) {
-            val place = Autocomplete.getPlaceFromIntent(result.data!!)
-            endPlace = place
-            tvEndLocation.text = place.name
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            val name = data?.getStringExtra("SEARCH_QUERY") ?: ""
+            val address = data?.getStringExtra("PLACE_ADDRESS") ?: ""
+            val lat = data?.getDoubleExtra("PLACE_LAT", 0.0) ?: 0.0
+            val lng = data?.getDoubleExtra("PLACE_LNG", 0.0) ?: 0.0
+            
+            endPlace = CustomPlace(name, address, LatLng(lat, lng))
+            tvEndLocation.text = name
         }
     }
 
@@ -108,9 +120,19 @@ class CreateRideActivity : AppCompatActivity() {
             showTimePicker(rideCalendar) { updateRideDateTimeDisplay() } 
         }
 
-        // Locations
-        findViewById<MaterialCardView>(R.id.cardStartLocation).setOnClickListener { launchPlaceSearch(startLocationLauncher) }
-        findViewById<MaterialCardView>(R.id.cardEndLocation).setOnClickListener { launchPlaceSearch(endLocationLauncher) }
+        // Locations - Use custom SearchActivity
+        findViewById<MaterialCardView>(R.id.cardStartLocation).setOnClickListener { 
+            val intent = Intent(this, SearchActivity::class.java).apply {
+                putExtra("HINT", "Search Start Location")
+            }
+            startLocationLauncher.launch(intent)
+        }
+        findViewById<MaterialCardView>(R.id.cardEndLocation).setOnClickListener { 
+            val intent = Intent(this, SearchActivity::class.java).apply {
+                putExtra("HINT", "Search Destination")
+            }
+            endLocationLauncher.launch(intent)
+        }
 
         // Post Option Toggle
         findViewById<RadioGroup>(R.id.radioGroupPost).setOnCheckedChangeListener { _, checkedId ->
@@ -136,13 +158,6 @@ class CreateRideActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnCreateEvent).setOnClickListener { checkExistingRideAndCreate() }
     }
 
-    private fun launchPlaceSearch(launcher: androidx.activity.result.ActivityResultLauncher<android.content.Intent>) {
-        val fields = listOf(Place.Field.ID, Place.Field.NAME, Place.Field.LAT_LNG, Place.Field.ADDRESS)
-        val intent = Autocomplete.IntentBuilder(AutocompleteActivityMode.OVERLAY, fields)
-            .build(this)
-        launcher.launch(intent)
-    }
-
     private fun showDatePicker(calendar: Calendar, setMinDate: Boolean = false, onSet: () -> Unit) {
         val datePickerDialog = DatePickerDialog(this, { _, year, month, day ->
             calendar.set(year, month, day)
@@ -150,7 +165,6 @@ class CreateRideActivity : AppCompatActivity() {
         }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH))
         
         if (setMinDate) {
-            // Set the minimum date to today to prevent selecting previous dates
             datePickerDialog.datePicker.minDate = System.currentTimeMillis() - 1000
         }
         
@@ -179,17 +193,13 @@ class CreateRideActivity : AppCompatActivity() {
             end.latitude, end.longitude,
             results
         )
-        return (results[0] / 1000).toDouble() // Convert to kilometers
+        return (results[0] / 1000).toDouble()
     }
 
-    /**
-     * Estimated duration based on distance and average speed (e.g. 40 km/h).
-     * Returns duration in SECONDS.
-     */
     private fun estimateDuration(distanceKm: Double): Double {
-        val averageSpeedKmh = 35.0 // Average speed in city/event context
+        val averageSpeedKmh = 35.0
         val hours = distanceKm / averageSpeedKmh
-        return hours * 3600 // Convert hours to seconds
+        return hours * 3600
     }
 
     private fun checkExistingRideAndCreate() {
@@ -200,7 +210,6 @@ class CreateRideActivity : AppCompatActivity() {
                 if (!currentJoinedRide.isNullOrEmpty()) {
                     Toast.makeText(this, "You already have an active ride. Finish it first.", Toast.LENGTH_SHORT).show()
                 } else {
-                    // Check for scheduled rides as well
                     db.collection("rides")
                         .whereEqualTo("hostId", userId)
                         .whereEqualTo("isScheduled", true)
@@ -212,15 +221,10 @@ class CreateRideActivity : AppCompatActivity() {
                                 validateAndCreateRide()
                             }
                         }
-                        .addOnFailureListener {
-                            validateAndCreateRide()
-                        }
+                        .addOnFailureListener { validateAndCreateRide() }
                 }
             }
-            .addOnFailureListener { e ->
-                Log.e("CreateRideActivity", "Error checking existing ride", e)
-                validateAndCreateRide()
-            }
+            .addOnFailureListener { validateAndCreateRide() }
     }
 
     private fun validateAndCreateRide() {
@@ -236,13 +240,10 @@ class CreateRideActivity : AppCompatActivity() {
             Toast.makeText(this, "Please select ride date and time", Toast.LENGTH_SHORT).show()
             return
         }
-
-        // Validate that the selected ride date is not in the past
         if (rideCalendar.timeInMillis < System.currentTimeMillis()) {
             Toast.makeText(this, "Ride date and time cannot be in the past", Toast.LENGTH_SHORT).show()
             return
         }
-
         if (startPlace == null || endPlace == null) {
             Toast.makeText(this, "Please select Start and End locations", Toast.LENGTH_SHORT).show()
             return
@@ -254,14 +255,11 @@ class CreateRideActivity : AppCompatActivity() {
             Toast.makeText(this, "Please select a date to auto-post", Toast.LENGTH_SHORT).show()
             return
         }
-
-        // Validate scheduled post time
         if (isScheduled && scheduledCalendar.timeInMillis < System.currentTimeMillis()) {
             Toast.makeText(this, "Scheduled post time cannot be in the past", Toast.LENGTH_SHORT).show()
             return
         }
 
-        // Calculate distance and estimated duration
         val rideDistance = calculateDistance(startPlace?.latLng, endPlace?.latLng)
         val rideDurationSeconds = estimateDuration(rideDistance)
 
@@ -270,7 +268,6 @@ class CreateRideActivity : AppCompatActivity() {
         val postRef = db.collection("posts").document()
         val sharedRouteRef = db.collection("sharedRoutes").document()
 
-        // 1. Prepare RIDE Data (Main collection)
         val rideData = hashMapOf(
             "rideName" to name,
             "description" to desc,
@@ -289,13 +286,11 @@ class CreateRideActivity : AppCompatActivity() {
             "duration" to rideDurationSeconds
         )
 
-        // 3. Prepare POST Data (For Feed)
         val postTime = if (isScheduled) scheduledCalendar.time else java.util.Date()
 
-        // 2. Prepare Shared Ride Data (Visible to others for joining)
         val sharedRideData = hashMapOf(
             "datetime" to Timestamp(rideCalendar.time),
-            "createdAt" to Timestamp(postTime), // <--- ADDED: Use postTime for visibility logic
+            "createdAt" to Timestamp(postTime),
             "destination" to endPlace?.name,
             "destinationCoordinates" to mapOf(
                 "latitude" to (endPlace?.latLng?.latitude ?: 0.0),

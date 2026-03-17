@@ -43,19 +43,21 @@ class SearchActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_search)
 
-        try {
-            Places.initialize(applicationContext, "AIzaSyBdsslBjsFC919mvY0osI8hAmrPOzFp_LE")
-            placesClient = Places.createClient(this)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize Places API")
-            return
+        if (!Places.isInitialized()) {
+            Places.initialize(applicationContext, getString(R.string.google_maps_key))
         }
+        placesClient = Places.createClient(this)
 
         val backButton = findViewById<ImageView>(R.id.back_button)
         val micButton = findViewById<ImageView>(R.id.mic_button)
         searchPlaceholder = findViewById<EditText>(R.id.search_placeholder)
         suggestionsRecyclerView = findViewById<RecyclerView>(R.id.suggestions_recycler_view)
         resultsContainer = findViewById<CardView>(R.id.results_container)
+
+        // Set custom hint if provided
+        intent.getStringExtra("HINT")?.let {
+            searchPlaceholder.hint = it
+        }
 
         suggestionsRecyclerView.layoutManager = LinearLayoutManager(this)
         suggestionsRecyclerView.adapter = object : RecyclerView.Adapter<PlaceViewHolder>() {
@@ -69,7 +71,7 @@ class SearchActivity : AppCompatActivity() {
                 holder.placeName.text = prediction.getPrimaryText(null).toString()
                 holder.placeAddress.text = prediction.getSecondaryText(null).toString()
                 holder.itemView.setOnClickListener {
-                    fetchPlaceDetails(prediction.placeId, prediction.getPrimaryText(null).toString())
+                    fetchPlaceDetails(prediction.placeId)
                 }
             }
 
@@ -103,11 +105,7 @@ class SearchActivity : AppCompatActivity() {
     }
 
     private fun updateUI() {
-        if (suggestions.isNotEmpty()) {
-            resultsContainer.visibility = View.VISIBLE
-        } else {
-            resultsContainer.visibility = View.GONE
-        }
+        resultsContainer.visibility = if (suggestions.isNotEmpty()) View.VISIBLE else View.GONE
         suggestionsRecyclerView.adapter?.notifyDataSetChanged()
     }
 
@@ -135,7 +133,7 @@ class SearchActivity : AppCompatActivity() {
     private fun fetchPlaceSuggestions(query: String) {
         val token = AutocompleteSessionToken.newInstance()
         val request = FindAutocompletePredictionsRequest.builder()
-            .setCountries("PH")
+            .setCountries("PH") // Restrict to Philippines
             .setSessionToken(token)
             .setQuery(query)
             .build()
@@ -145,17 +143,23 @@ class SearchActivity : AppCompatActivity() {
             suggestions.addAll(response.autocompletePredictions)
             updateUI()
         }.addOnFailureListener { exception ->
-            Log.e(TAG, "Error fetching suggestions")
+            Log.e(TAG, "Error fetching suggestions: ${exception.message}")
         }
     }
 
-    private fun fetchPlaceDetails(placeId: String, placeName: String) {
-        val fields = listOf(com.google.android.libraries.places.api.model.Place.Field.NAME, com.google.android.libraries.places.api.model.Place.Field.ADDRESS, com.google.android.libraries.places.api.model.Place.Field.LAT_LNG)
+    private fun fetchPlaceDetails(placeId: String) {
+        val fields = listOf(
+            com.google.android.libraries.places.api.model.Place.Field.ID,
+            com.google.android.libraries.places.api.model.Place.Field.NAME,
+            com.google.android.libraries.places.api.model.Place.Field.ADDRESS,
+            com.google.android.libraries.places.api.model.Place.Field.LAT_LNG
+        )
         val request = FetchPlaceRequest.builder(placeId, fields).build()
 
         placesClient.fetchPlace(request).addOnSuccessListener { response ->
             val place = response.place
             val resultIntent = Intent().apply {
+                putExtra("PLACE_ID", place.id)
                 putExtra("SEARCH_QUERY", place.name)
                 putExtra("PLACE_ADDRESS", place.address)
                 putExtra("PLACE_LAT", place.latLng?.latitude ?: 0.0)
@@ -163,6 +167,8 @@ class SearchActivity : AppCompatActivity() {
             }
             setResult(Activity.RESULT_OK, resultIntent)
             finish()
+        }.addOnFailureListener { e ->
+            Toast.makeText(this, "Failed to fetch place details", Toast.LENGTH_SHORT).show()
         }
     }
 
