@@ -3,6 +3,7 @@ package com.aorv.blazerider
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import com.google.android.material.card.MaterialCardView
@@ -42,11 +43,21 @@ class SharedRidesActivity : AppCompatActivity() {
         auth = FirebaseAuth.getInstance()
         db = FirebaseFirestore.getInstance()
 
-        // Set up close button
+        // Set up close button to trigger back navigation
         val toolbar = findViewById<MaterialToolbar>(R.id.top_app_bar)
         toolbar.setNavigationOnClickListener {
-            finish()
+            onBackPressedDispatcher.onBackPressed()
         }
+
+        // Handle back press to always redirect to HomeActivity
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                val intent = Intent(this@SharedRidesActivity, HomeActivity::class.java)
+                intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                startActivity(intent)
+                finish()
+            }
+        })
 
         // Initialize UI components
         rideBanner = findViewById(R.id.ride_banner)
@@ -247,21 +258,21 @@ class SharedRidesActivity : AppCompatActivity() {
                     val datetime = rideDoc.getTimestamp("datetime")?.toDate()?.time ?: 0L
                     val destination = rideDoc.getString("destination") ?: ""
                     val destinationCoordinates = rideDoc.get("destinationCoordinates") as? Map<String, Any>
-                    val destinationLat = destinationCoordinates?.get("latitude") as? Double ?: 0.0
-                    val destinationLng = destinationCoordinates?.get("longitude") as? Double ?: 0.0
+                    val destinationLat = (destinationCoordinates?.get("latitude") as? Number)?.toDouble() ?: 0.0
+                    val destinationLng = (destinationCoordinates?.get("longitude") as? Number)?.toDouble() ?: 0.0
                     val distance = rideDoc.getDouble("distance") ?: 0.0
                     val duration = rideDoc.getDouble("duration") ?: 0.0
                     val origin = rideDoc.getString("origin") ?: ""
                     val originCoordinates = rideDoc.get("originCoordinates") as? Map<String, Any>
-                    val originLat = originCoordinates?.get("latitude") as? Double ?: 0.0
-                    val originLng = originCoordinates?.get("longitude") as? Double ?: 0.0
+                    val originLat = (originCoordinates?.get("latitude") as? Number)?.toDouble() ?: 0.0
+                    val originLng = (originCoordinates?.get("longitude") as? Number)?.toDouble() ?: 0.0
                     val userUid = rideDoc.getString("userUid") ?: ""
 
                     val intent = Intent(this@SharedRidesActivity, PreviewRideActivity::class.java).apply {
                         putExtra("ride_datetime", datetime)
                         putExtra("ride_destination", destination)
                         putExtra("ride_destination_lat", destinationLat)
-                        putExtra("ride_destination_lng", destinationLat)
+                        putExtra("ride_destination_lng", destinationLng)
                         putExtra("ride_distance", distance)
                         putExtra("ride_duration", duration)
                         putExtra("ride_origin", origin)

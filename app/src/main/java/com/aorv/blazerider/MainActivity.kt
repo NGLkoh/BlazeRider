@@ -120,11 +120,77 @@ class MainActivity : AppCompatActivity() {
                         if (isAdmin) {
                             Log.d(TAG, "You are an admin, redirecting to AdminActivity")
                             startActivity(Intent(this, AdminActivity::class.java))
+                            finish()
                         } else if (verified) {
-                            Log.d(TAG, "User is verified, redirecting to HomeActivity")
-                            startActivity(Intent(this, HomeActivity::class.java))
-                            // Start location updates only for verified users after routing
-                            startLocationUpdates(currentUser.uid)
+                            Log.d(TAG, "User is verified, checking for active ride")
+                            val currentJoinedRide = document.getString("currentJoinedRide")
+                            if (!currentJoinedRide.isNullOrEmpty()) {
+                                db.collection("sharedRoutes").document(currentJoinedRide).get()
+                                    .addOnSuccessListener { rideDoc ->
+                                        if (rideDoc.exists()) {
+                                            val status = rideDoc.getString("status")
+                                            if (status == "ongoing" || status == "active") {
+                                                // Safely extract coordinates as Map<String, Double>
+                                                val destCoordsRaw = rideDoc.get("destinationCoordinates") as? Map<*, *>
+                                                val destCoords = destCoordsRaw?.mapNotNull { (k, v) ->
+                                                    val key = k as? String ?: return@mapNotNull null
+                                                    val value = (v as? Number)?.toDouble() ?: return@mapNotNull null
+                                                    key to value
+                                                }?.toMap()
+
+                                                val origCoordsRaw = rideDoc.get("originCoordinates") as? Map<*, *>
+                                                val origCoords = origCoordsRaw?.mapNotNull { (k, v) ->
+                                                    val key = k as? String ?: return@mapNotNull null
+                                                    val value = (v as? Number)?.toDouble() ?: return@mapNotNull null
+                                                    key to value
+                                                }?.toMap()
+                                                
+                                                val ride = SharedRide(
+                                                    datetime = rideDoc.getTimestamp("datetime"),
+                                                    destination = rideDoc.getString("destination"),
+                                                    destinationCoordinates = destCoords,
+                                                    distance = rideDoc.getDouble("distance"),
+                                                    duration = rideDoc.getDouble("duration"),
+                                                    origin = rideDoc.getString("origin"),
+                                                    originCoordinates = origCoords,
+                                                    userUid = rideDoc.getString("userUid"),
+                                                    sharedRoutesId = rideDoc.id,
+                                                    status = status,
+                                                    isPublic = rideDoc.getBoolean("isPublic") ?: true
+                                                )
+                                                
+                                                Log.d(TAG, "Active ride found, redirecting to InAppNavigationActivity")
+                                                val intent = Intent(this, InAppNavigationActivity::class.java).apply {
+                                                    putExtra("EXTRA_RIDE", ride)
+                                                }
+                                                startActivity(intent)
+                                            } else {
+                                                Log.d(TAG, "Ride exists but status is $status, redirecting to Home")
+                                                db.collection("users").document(currentUser.uid).update("currentJoinedRide", null)
+                                                startActivity(Intent(this, HomeActivity::class.java))
+                                                startLocationUpdates(currentUser.uid)
+                                            }
+                                        } else {
+                                            Log.d(TAG, "Ride document not found, clearing and redirecting to Home")
+                                            db.collection("users").document(currentUser.uid).update("currentJoinedRide", null)
+                                            startActivity(Intent(this, HomeActivity::class.java))
+                                            startLocationUpdates(currentUser.uid)
+                                        }
+                                        finish()
+                                    }
+                                    .addOnFailureListener {
+                                        Log.e(TAG, "Failed to check ride status, redirecting to Home")
+                                        startActivity(Intent(this, HomeActivity::class.java))
+                                        startLocationUpdates(currentUser.uid)
+                                        finish()
+                                    }
+                            } else {
+                                Log.d(TAG, "User is verified, no active ride, redirecting to HomeActivity")
+                                startActivity(Intent(this, HomeActivity::class.java))
+                                // Start location updates only for verified users after routing
+                                startLocationUpdates(currentUser.uid)
+                                finish()
+                            }
                         } else {
                             Log.d(TAG, "User is not verified, redirecting based on stepCompleted: $stepCompleted")
                             val intent = when (stepCompleted) {
@@ -134,14 +200,15 @@ class MainActivity : AppCompatActivity() {
                                 else -> Intent(this, EmailVerificationActivity::class.java)
                             }
                             startActivity(intent)
+                            finish()
                         }
                     } else {
                         Log.w(TAG, "User document not found in Firestore, creating document")
                         createUserDocument(currentUser.uid, currentUser.email, currentUser.displayName)
                         // Redirect to the first onboarding step instead of MainMenuActivity to avoid an infinite loop
                         startActivity(Intent(this, EmailVerificationActivity::class.java))
+                        finish()
                     }
-                    finish() // Finish MainActivity immediately after routing
                 }
                 .addOnFailureListener { exception ->
                     Log.e(TAG, "Failed to fetch Firestore user data: ${exception.message}")

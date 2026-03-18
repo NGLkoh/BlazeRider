@@ -1,6 +1,7 @@
 package com.aorv.blazerider
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.*
 import android.graphics.drawable.Drawable
@@ -246,6 +247,12 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
         if (!hasArrived) {
             logNavigationToHistory("Cancelled")
         }
+        // Instead of just finishing, we redirect to SharedRidesActivity with My Rides tab (index 1) selected
+        val intent = Intent(this, SharedRidesActivity::class.java).apply {
+            putExtra("SELECT_TAB", 1)
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        startActivity(intent)
         finish()
     }
 
