@@ -9,11 +9,17 @@ import android.location.Location
 import android.os.Bundle
 import android.os.Looper
 import android.util.Log
+import android.view.View
+import android.view.ViewGroup
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updateLayoutParams
 import com.aorv.blazerider.databinding.ActivityInAppNavigationBinding
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.target.CustomTarget
@@ -59,6 +65,7 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
     private var currentLocation: LatLng? = null
+    private var currentBearing: Float = 0f
     
     private var destName: String? = null
     private var destLat: Double = 0.0
@@ -68,14 +75,36 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private var liveLocationsListener: ListenerRegistration? = null
     private val riderMarkers = mutableMapOf<String, Marker>()
+    private val loadingMarkers = mutableSetOf<String>()
     private val riderProfileImages = mutableMapOf<String, String>() // userId -> profileImageUrl
     private var currentUserProfileUrl: String? = null
     private var isAdmin = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false) // Enable drawing behind system bars
         binding = ActivityInAppNavigationBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // Apply window insets to prevent UI overlap with status bar and navigation bar
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { v, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            
+            // Top panel (Instruction Card) padding to avoid status bar
+            binding.instructionPanel.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+                topMargin = systemBars.top + (12 * resources.displayMetrics.density).toInt()
+            }
+            
+            // Bottom panel (Nav Info Card) margin to avoid navigation bar
+            binding.navInfoCard.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+                val margin12dp = (12 * resources.displayMetrics.density).toInt()
+                bottomMargin = systemBars.bottom + margin12dp
+                leftMargin = margin12dp
+                rightMargin = margin12dp
+            }
+            
+            insets
+        }
 
         @Suppress("DEPRECATION")
         currentRide = intent.getParcelableExtra("EXTRA_RIDE")
@@ -123,7 +152,13 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
 
         binding.gpsButton.setOnClickListener {
             currentLocation?.let {
-                googleMap?.animateCamera(CameraUpdateFactory.newLatLngZoom(it, 18f))
+                val cameraPosition = CameraPosition.Builder()
+                    .target(it)
+                    .zoom(18f)
+                    .tilt(45f)
+                    .bearing(currentBearing)
+                    .build()
+                googleMap?.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
             }
         }
 
@@ -153,8 +188,9 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
                         com.google.firebase.firestore.DocumentChange.Type.MODIFIED -> {
                             val lat = dc.document.getDouble("latitude") ?: return@forEach
                             val lng = dc.document.getDouble("longitude") ?: return@forEach
+                            val bearing = dc.document.getDouble("bearing")?.toFloat() ?: 0f
                             val pos = LatLng(lat, lng)
-                            updateRiderMarker(userId, pos)
+                            updateRiderMarker(userId, pos, bearing)
                         }
                         com.google.firebase.firestore.DocumentChange.Type.REMOVED -> {
                             riderMarkers[userId]?.remove()
@@ -165,88 +201,109 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
             }
     }
 
-    private fun updateRiderMarker(userId: String, position: LatLng) {
+    private fun updateRiderMarker(userId: String, position: LatLng, bearing: Float) {
         val marker = riderMarkers[userId]
         if (marker != null) {
             marker.position = position
-        } else {
+            marker.rotation = bearing
+        } else if (!loadingMarkers.contains(userId)) {
+            loadingMarkers.add(userId)
             if (riderProfileImages.containsKey(userId)) {
-                createMarkerWithImage(userId, position, riderProfileImages[userId])
+                createMarkerWithImage(userId, position, riderProfileImages[userId], bearing)
             } else {
                 firestore.collection("users").document(userId).get()
                     .addOnSuccessListener { doc ->
                         val imageUrl = doc.getString("profileImageUrl")
                         riderProfileImages[userId] = imageUrl ?: ""
-                        createMarkerWithImage(userId, position, imageUrl)
+                        createMarkerWithImage(userId, position, imageUrl, bearing)
+                    }
+                    .addOnFailureListener {
+                        loadingMarkers.remove(userId)
                     }
             }
         }
     }
 
-    private fun createMarkerWithImage(userId: String, position: LatLng, imageUrl: String?) {
-        if (googleMap == null) return
+    private fun createMarkerWithImage(userId: String, position: LatLng, imageUrl: String?, bearing: Float) {
+        if (googleMap == null) {
+            loadingMarkers.remove(userId)
+            return
+        }
 
         val requestBuilder = Glide.with(this).asBitmap()
         val finalUrl = if (imageUrl.isNullOrEmpty()) R.drawable.ic_anonymous else imageUrl
 
-        requestBuilder.load(finalUrl).circleCrop().into(object : CustomTarget<Bitmap>(100, 100) {
+        requestBuilder.load(finalUrl).circleCrop().into(object : CustomTarget<Bitmap>(120, 120) {
             override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
-                val markerIcon = BitmapDescriptorFactory.fromBitmap(getCircularBitmapWithBorder(resource))
+                val markerIcon = BitmapDescriptorFactory.fromBitmap(getCircularBitmapWithArrow(resource))
                 val newMarker = googleMap?.addMarker(
                     MarkerOptions()
                         .position(position)
                         .icon(markerIcon)
                         .anchor(0.5f, 0.5f)
+                        .rotation(bearing)
+                        .flat(true)
                         .zIndex(1.0f)
                 )
                 if (newMarker != null) {
                     riderMarkers[userId] = newMarker
                 }
+                loadingMarkers.remove(userId)
             }
 
-            override fun onLoadCleared(placeholder: Drawable?) {}
+            override fun onLoadCleared(placeholder: Drawable?) {
+                loadingMarkers.remove(userId)
+            }
         })
     }
 
-    private fun getCircularBitmapWithBorder(bitmap: Bitmap): Bitmap {
-        val size = 120
-        val borderSize = 10
+    private fun getCircularBitmapWithArrow(bitmap: Bitmap): Bitmap {
+        val size = 250 // Increased size for prominence
+        val centerX = size / 2f
+        val centerY = size / 2f
+        
         val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
-        val paint = Paint()
-        paint.isAntiAlias = true
-        
-        // Draw white border circle
+        // 1. Draw ONE Large prominent direction arrow
+        val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#FF4500")
+            style = Paint.Style.FILL
+        }
+        val arrowPath = Path()
+        arrowPath.moveTo(centerX, 0f) // Sharp tip at top
+        arrowPath.lineTo(centerX - 45, 80f) // Broad base
+        arrowPath.lineTo(centerX + 45, 80f) // Broad base
+        arrowPath.close()
+        canvas.drawPath(arrowPath, arrowPaint)
+
+        // 2. Draw profile circle slightly below the arrow tip for integration
+        val radius = 60f
+        val borderSize = 10f
+        val profileCenterY = centerY + 30f // Positioned to look like the arrow belongs to it
+
+        // White base/border
         paint.color = Color.WHITE
-        canvas.drawCircle((size / 2).toFloat(), (size / 2).toFloat(), (size / 2).toFloat(), paint)
+        canvas.drawCircle(centerX, profileCenterY, radius, paint)
 
-        // Draw profile image circle
-        val innerCircleRadius = (size / 2 - borderSize).toFloat()
-        
-        // Scale bitmap to fit
-        val scaledBitmap = Bitmap.createScaledBitmap(bitmap, size - borderSize * 2, size - borderSize * 2, false)
-        
+        // Profile image
+        val innerRadius = radius - borderSize
+        val scaledBitmap = Bitmap.createScaledBitmap(bitmap, (innerRadius * 2).toInt(), (innerRadius * 2).toInt(), false)
         val shader = BitmapShader(scaledBitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
-        val imagePaint = Paint().apply {
-            isAntiAlias = true
-            setShader(shader)
-        }
-        
+        val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { setShader(shader) }
         val matrix = Matrix()
-        matrix.setTranslate(borderSize.toFloat(), borderSize.toFloat())
+        matrix.setTranslate(centerX - innerRadius, profileCenterY - innerRadius)
         shader.setLocalMatrix(matrix)
+        canvas.drawCircle(centerX, profileCenterY, innerRadius, imagePaint)
         
-        canvas.drawCircle((size / 2).toFloat(), (size / 2).toFloat(), innerCircleRadius, imagePaint)
-        
-        // Re-draw theme border
-        val borderPaint = Paint().apply {
-            color = Color.parseColor("#FF4500") 
+        // Red-Orange border
+        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#FF4500")
             style = Paint.Style.STROKE
-            strokeWidth = borderSize.toFloat()
-            isAntiAlias = true
+            strokeWidth = borderSize
         }
-        canvas.drawCircle((size / 2).toFloat(), (size / 2).toFloat(), (size / 2 - borderSize / 2).toFloat(), borderPaint)
+        canvas.drawCircle(centerX, profileCenterY, radius - borderSize / 2f, borderPaint)
 
         return output
     }
@@ -337,12 +394,13 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
                 val location = locationResult.lastLocation ?: return
                 val latLng = LatLng(location.latitude, location.longitude)
                 currentLocation = latLng
-                updateNavigationUI(latLng)
+                currentBearing = location.bearing
+                updateNavigationUI(latLng, location.bearing)
             }
         }
     }
 
-    private fun updateNavigationUI(latLng: LatLng) {
+    private fun updateNavigationUI(latLng: LatLng, bearing: Float) {
         if (hasArrived) return
 
         val destLatLng = LatLng(destLat, destLng)
@@ -365,16 +423,23 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
 
         // Update map camera
         googleMap?.let { map ->
+            val cameraPosition = CameraPosition.Builder()
+                .target(latLng)
+                .zoom(18f)
+                .tilt(45f)
+                .bearing(bearing)
+                .build()
+            
             if (isFirstLocation) {
-                map.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, 18f))
+                map.moveCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
                 isFirstLocation = false
             } else {
-                map.animateCamera(CameraUpdateFactory.newLatLng(latLng))
+                map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
             }
         }
         
         // Update my own marker
-        updateRiderMarker(auth.currentUser?.uid ?: "me", latLng)
+        updateRiderMarker(auth.currentUser?.uid ?: "me", latLng, bearing)
         
         fetchAndDrawRoute(latLng, destLatLng)
 
@@ -382,7 +447,7 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
             val liveLocationData = hashMapOf(
                 "latitude" to latLng.latitude,
                 "longitude" to latLng.longitude,
-                "bearing" to 0.0f
+                "bearing" to bearing
             )
 
             currentRide?.sharedRoutesId?.let { rideId ->
@@ -422,8 +487,9 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
                 location?.let {
                     val latLng = LatLng(it.latitude, it.longitude)
                     currentLocation = latLng
+                    currentBearing = it.bearing
                     if (googleMap != null) {
-                        updateNavigationUI(latLng)
+                        updateNavigationUI(latLng, it.bearing)
                     }
                 }
             }
@@ -454,9 +520,15 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
         )
 
         currentLocation?.let {
-            this.googleMap?.moveCamera(CameraUpdateFactory.newLatLngZoom(it, 18f))
+            val cameraPosition = CameraPosition.Builder()
+                .target(it)
+                .zoom(18f)
+                .tilt(45f)
+                .bearing(currentBearing)
+                .build()
+            this.googleMap?.moveCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
             isFirstLocation = false
-            updateNavigationUI(it)
+            updateNavigationUI(it, currentBearing)
         }
     }
 

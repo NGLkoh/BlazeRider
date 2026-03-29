@@ -436,14 +436,25 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
 
     private fun showScheduleDateTimePicker() {
         val calendar = Calendar.getInstance()
-        DatePickerDialog(requireContext(), { _, year, month, dayOfMonth ->
-            calendar.set(year, month, dayOfMonth)
+        val datePickerDialog = DatePickerDialog(requireContext(), { _, year, month, dayOfMonth ->
+            val selectedCalendar = Calendar.getInstance()
+            selectedCalendar.set(year, month, dayOfMonth)
+            
             TimePickerDialog(requireContext(), { _, hourOfDay, minute ->
-                calendar.set(Calendar.HOUR_OF_DAY, hourOfDay)
-                calendar.set(Calendar.MINUTE, minute)
-                scheduleRide(calendar.timeInMillis)
+                selectedCalendar.set(Calendar.HOUR_OF_DAY, hourOfDay)
+                selectedCalendar.set(Calendar.MINUTE, minute)
+                
+                if (selectedCalendar.timeInMillis < System.currentTimeMillis()) {
+                    Toast.makeText(requireContext(), "Please select a future time", Toast.LENGTH_SHORT).show()
+                } else {
+                    scheduleRide(selectedCalendar.timeInMillis)
+                }
             }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), false).show()
-        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show()
+        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH))
+        
+        // Disable previous dates and years
+        datePickerDialog.datePicker.minDate = System.currentTimeMillis() - 1000
+        datePickerDialog.show()
     }
 
     private fun startRideAndNavigate() {
