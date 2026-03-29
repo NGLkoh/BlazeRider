@@ -84,22 +84,35 @@ class FeedFragment : Fragment() {
 
         recyclerView = view.findViewById(R.id.feed_recycler_view)
         recyclerView.layoutManager = LinearLayoutManager(context)
-        postAdapter = PostAdapter(
-            onDeletePost = { post -> deletePost(post) },
-            onCommentClick = { post ->
-                val intent = Intent(requireContext(), CommentsActivity::class.java).apply {
-                    putExtra("POST_ID", post.id)
-                }
-                commentsActivityLauncher.launch(intent)
-            }
-        )
-        recyclerView.adapter = postAdapter
+        
+        // In FeedFragment, we check if the user is an admin to disable reactions
+        checkAdminStatusAndInitializeAdapter()
 
         val userImage = view.findViewById<ShapeableImageView>(R.id.user_image)
         loadUserProfile(userImage)
 
         loadPosts()
         setupUnreadMessagesListener()
+    }
+
+    private fun checkAdminStatusAndInitializeAdapter() {
+        auth.currentUser?.uid?.let { uid ->
+            db.collection("users").document(uid).get().addOnSuccessListener { doc ->
+                val isAdmin = doc.getBoolean("admin") ?: false
+                postAdapter = PostAdapter(
+                    onDeletePost = { post -> deletePost(post) },
+                    onCommentClick = { post ->
+                        val intent = Intent(requireContext(), CommentsActivity::class.java).apply {
+                            putExtra("POST_ID", post.id)
+                        }
+                        commentsActivityLauncher.launch(intent)
+                    },
+                    isAdminUser = isAdmin
+                )
+                recyclerView.adapter = postAdapter
+                loadPosts() // Reload posts once adapter is ready
+            }
+        }
     }
 
     private fun deletePost(post: Post) {
@@ -176,6 +189,8 @@ class FeedFragment : Fragment() {
         }
     }
     private fun loadPosts() {
+        if (!::postAdapter.isInitialized) return
+        
         postsListener?.remove()
         postsListener = db.collection("posts")
             .whereEqualTo("admin", false)  // Only fetch non-admin posts

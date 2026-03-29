@@ -8,8 +8,8 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
-import com.google.firebase.auth.FirebaseAuth
 import java.io.Serializable
 
 class JoinedUsersBottomSheetFragment : BottomSheetDialogFragment() {
@@ -38,13 +38,8 @@ class JoinedUsersBottomSheetFragment : BottomSheetDialogFragment() {
         val joinedUsersList = view.findViewById<RecyclerView>(R.id.joined_users_list)
         joinedUsersList.layoutManager = LinearLayoutManager(context)
 
-        val users = joinedUsers.ifEmpty {
-            emptyList()
-        }
-
-        joinedUsersAdapter = JoinedUsersAdapter(users) { user ->
+        joinedUsersAdapter = JoinedUsersAdapter(joinedUsers) { user ->
             val intent = Intent(context, ChatConversationActivity::class.java).apply {
-                // Split name if possible for better contact data, or just use as firstName
                 val nameParts = user.name.split(" ", limit = 2)
                 val firstName = nameParts.getOrNull(0) ?: user.name
                 val lastName = nameParts.getOrNull(1) ?: ""
@@ -56,25 +51,37 @@ class JoinedUsersBottomSheetFragment : BottomSheetDialogFragment() {
                     profileImageUrl = user.profilePictureUrl
                 )
                 putExtra("CONTACT", contact)
-                // We don't pass chatId here so ChatConversationActivity 
-                // generates the stable ID based on current user and contact ID.
             }
             startActivity(intent)
-            dismiss() // Close the bottom sheet after clicking
+            dismiss()
         }
         joinedUsersList.adapter = joinedUsersAdapter
+        
+        // Disable internal scrolling for the list so the BottomSheet handles it,
+        // and specifically prevent any scrolling feel if only one item is present.
+        joinedUsersList.isNestedScrollingEnabled = joinedUsers.size > 3 
+    }
 
-        val bottomSheet = view.findViewById<View>(R.id.bottom_sheet_content)
-            ?: return
-
-        val behavior = BottomSheetBehavior.from(bottomSheet)
-        if (users.isNotEmpty()) {
+    override fun onStart() {
+        super.onStart()
+        val dialog = dialog as? BottomSheetDialog
+        val bottomSheet = dialog?.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+        
+        bottomSheet?.let {
+            val behavior = BottomSheetBehavior.from(it)
+            
+            // Ensure the sheet fits its content to avoid empty white space
+            behavior.isFitToContents = true
             behavior.state = BottomSheetBehavior.STATE_EXPANDED
-        } else {
-            behavior.state = BottomSheetBehavior.STATE_COLLAPSED
+            
+            // Disable dragging/scrolling the sheet if there's only one user
+            if (joinedUsers.size <= 1) {
+                behavior.isDraggable = false
+            } else {
+                behavior.isDraggable = true
+                behavior.skipCollapsed = true // Avoid intermediate collapsed state
+            }
         }
-        behavior.peekHeight = (100 * resources.displayMetrics.density).toInt()
-        behavior.isHideable = false
     }
 
     companion object {

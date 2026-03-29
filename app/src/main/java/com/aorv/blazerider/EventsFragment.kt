@@ -89,7 +89,8 @@ class EventsFragment : Fragment() {
                 }
                 commentsActivityLauncher.launch(intent)
             },
-            isAnnouncement = false
+            isAnnouncement = false,
+            isAdminUser = true // This is only used in AdminActivity
         )
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
         recyclerView.adapter = postAdapter

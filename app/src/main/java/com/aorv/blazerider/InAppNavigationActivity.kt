@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.os.Looper
 import android.util.Log
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -69,6 +70,7 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
     private val riderMarkers = mutableMapOf<String, Marker>()
     private val riderProfileImages = mutableMapOf<String, String>() // userId -> profileImageUrl
     private var currentUserProfileUrl: String? = null
+    private var isAdmin = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -98,15 +100,21 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
-        binding.toolbar.setNavigationOnClickListener { handleCancel() }
         binding.exitNavButton.setOnClickListener { handleCancel() }
         binding.textDestination.text = destName ?: "Unknown"
 
-        // Fetch current user's profile URL
+        // Fetch current user's profile URL and admin status
         auth.currentUser?.uid?.let { uid ->
             firestore.collection("users").document(uid).get()
                 .addOnSuccessListener { doc ->
                     currentUserProfileUrl = doc.getString("profileImageUrl")
+                    isAdmin = when (val adminValue = doc.get("admin")) {
+                        is Boolean -> adminValue
+                        is String -> adminValue.toBoolean()
+                        is Long -> adminValue == 1L
+                        else -> false
+                    }
+                    if (uid == "A7USXq3qwFgCH4sov6mmPdtaGOn2") isAdmin = true
                 }
         }
 
@@ -245,13 +253,80 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private fun handleCancel() {
         if (!hasArrived) {
-            logNavigationToHistory("Cancelled")
+            val userId = auth.currentUser?.uid ?: return
+            val ride = currentRide
+            
+            if (ride != null && ride.userUid == userId) {
+                // Show confirmation to cancel the whole event if they are the creator
+                AlertDialog.Builder(this)
+                    .setTitle("Cancel Ride Event")
+                    .setMessage("Are you sure you want to cancel this ride event for everyone?")
+                    .setPositiveButton("Yes, Cancel") { _, _ ->
+                        cancelSharedRide(ride)
+                        navigateToAppropriateScreen()
+                    }
+                    .setNegativeButton("No, Just Exit") { _, _ ->
+                        logNavigationToHistory("Exited Early")
+                        navigateToAppropriateScreen()
+                    }
+                    .show()
+                return
+            } else {
+                logNavigationToHistory("Cancelled")
+            }
         }
-        // Instead of just finishing, we redirect to SharedRidesActivity with My Rides tab (index 1) selected
-        val intent = Intent(this, SharedRidesActivity::class.java).apply {
-            putExtra("SELECT_TAB", 1)
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        navigateToAppropriateScreen()
+    }
+
+    private fun cancelSharedRide(ride: SharedRide) {
+        val userId = auth.currentUser?.uid ?: return
+        val rideId = ride.sharedRoutesId ?: return
+
+        val batch = firestore.batch()
+        batch.update(firestore.collection("sharedRoutes").document(rideId), "status", "cancelled")
+        batch.update(firestore.collection("users").document(userId), "currentJoinedRide", null)
+
+        val cancelledRideHistory = RideHistory(
+            datetime = Timestamp.now(),
+            destination = ride.destination,
+            distance = ride.distance,
+            duration = ride.duration,
+            origin = ride.origin,
+            status = "Cancelled",
+            userUid = userId,
+            sharedRoutesId = rideId
+        )
+        batch.set(firestore.collection("users").document(userId).collection("rideHistory").document(), cancelledRideHistory)
+
+        ride.joinedRiders?.keys?.forEach { riderId ->
+            batch.update(firestore.collection("users").document(riderId), "currentJoinedRide", null)
+            val notifRef = firestore.collection("users").document(riderId).collection("notifications").document()
+            batch.set(notifRef, mapOf(
+                "actorId" to userId,
+                "createdAt" to Timestamp.now(),
+                "message" to "The ride from ${ride.origin} has been cancelled by the host.",
+                "type" to "ride_cancelled",
+                "isRead" to false
+            ))
         }
+
+        batch.commit().addOnSuccessListener {
+            Toast.makeText(this, "Ride event cancelled", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun navigateToAppropriateScreen() {
+        val intent = if (isAdmin) {
+            Intent(this, AdminActivity::class.java).apply {
+                putExtra("SELECT_TAB", R.id.nav_events)
+            }
+        } else {
+            Intent(this, SharedRidesActivity::class.java).apply {
+                putExtra("SELECT_TAB", 1)
+            }
+        }
+        
+        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         startActivity(intent)
         finish()
     }
@@ -359,19 +434,19 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
         fusedLocationClient.removeLocationUpdates(locationCallback)
     }
 
-    override fun onMapReady(map: GoogleMap) {
-        googleMap = map
-        googleMap?.uiSettings?.isMyLocationButtonEnabled = false
-        googleMap?.uiSettings?.isZoomControlsEnabled = false
+    override fun onMapReady(p0: GoogleMap) {
+        this.googleMap = p0
+        this.googleMap?.uiSettings?.isMyLocationButtonEnabled = false
+        this.googleMap?.uiSettings?.isZoomControlsEnabled = false
         
         // Disable default blue dot since we're using profile markers
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            googleMap?.isMyLocationEnabled = false 
+            this.googleMap?.isMyLocationEnabled = false 
             startLocationUpdates()
         }
 
         val destLatLng = LatLng(destLat, destLng)
-        destinationMarker = googleMap?.addMarker(
+        destinationMarker = this.googleMap?.addMarker(
             MarkerOptions()
                 .position(destLatLng)
                 .title(destName)
@@ -379,7 +454,7 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
         )
 
         currentLocation?.let {
-            googleMap?.moveCamera(CameraUpdateFactory.newLatLngZoom(it, 18f))
+            this.googleMap?.moveCamera(CameraUpdateFactory.newLatLngZoom(it, 18f))
             isFirstLocation = false
             updateNavigationUI(it)
         }

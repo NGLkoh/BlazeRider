@@ -131,46 +131,72 @@ class AddAdminActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            // Create Admin Logic using a secondary Firebase app instance
-            // This prevents the current admin session from being signed out
-            val secondaryApp = try {
-                FirebaseApp.getInstance("AdminCreationApp")
-            } catch (e: Exception) {
-                FirebaseApp.initializeApp(this, FirebaseApp.getInstance().options, "AdminCreationApp")
-            }
-            
-            val secondaryAuth = FirebaseAuth.getInstance(secondaryApp)
-
-            secondaryAuth.createUserWithEmailAndPassword(email, password)
-                .addOnSuccessListener { result ->
-                    val uid = result.user?.uid ?: return@addOnSuccessListener
-                    val adminData = mapOf(
-                        "uid" to uid,
-                        "email" to email,
-                        "admin" to true,
-                        "firstName" to "Admin",
-                        "lastName" to "User",
-                        "accountCreated" to FieldValue.serverTimestamp(),
-                        "verified" to true,
-                        "stepCompleted" to 4
-                    )
-                    db.collection("users").document(uid).set(adminData)
-                        .addOnSuccessListener {
-                            Toast.makeText(this, "Admin account created successfully", Toast.LENGTH_SHORT).show()
-                            emailEditText.text = null
-                            passwordEditText.text = null
-                            confirmPasswordEditText.text = null
-                            secondaryAuth.signOut()
-                        }
+            // Check if the email already exists in Firestore users collection
+            db.collection("users")
+                .whereEqualTo("email", email)
+                .get()
+                .addOnSuccessListener { querySnapshot ->
+                    if (!querySnapshot.isEmpty) {
+                        emailLayout.error = "This email is already registered to a user or admin."
+                        return@addOnSuccessListener
+                    }
+                    
+                    // Proceed with creation if email is not found in Firestore
+                    createAdminAccount(email, password, emailEditText, passwordEditText, confirmPasswordEditText, emailLayout)
                 }
                 .addOnFailureListener { e ->
-                    if (e is FirebaseAuthUserCollisionException) {
-                        emailLayout.error = "This email address is already in use by another account."
-                    } else {
-                        Toast.makeText(this, e.localizedMessage ?: "Creation failed", Toast.LENGTH_SHORT).show()
-                    }
+                    Toast.makeText(this, "Error checking email: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
                 }
         }
+    }
+
+    private fun createAdminAccount(
+        email: String,
+        password: String,
+        emailEditText: TextInputEditText,
+        passwordEditText: TextInputEditText,
+        confirmPasswordEditText: TextInputEditText,
+        emailLayout: TextInputLayout
+    ) {
+        // Create Admin Logic using a secondary Firebase app instance
+        // This prevents the current admin session from being signed out
+        val secondaryApp = try {
+            FirebaseApp.getInstance("AdminCreationApp")
+        } catch (e: Exception) {
+            FirebaseApp.initializeApp(this, FirebaseApp.getInstance().options, "AdminCreationApp")
+        }
+        
+        val secondaryAuth = FirebaseAuth.getInstance(secondaryApp)
+
+        secondaryAuth.createUserWithEmailAndPassword(email, password)
+            .addOnSuccessListener { result ->
+                val uid = result.user?.uid ?: return@addOnSuccessListener
+                val adminData = mapOf(
+                    "uid" to uid,
+                    "email" to email,
+                    "admin" to true,
+                    "firstName" to "Admin",
+                    "lastName" to "User",
+                    "accountCreated" to FieldValue.serverTimestamp(),
+                    "verified" to true,
+                    "stepCompleted" to 4
+                )
+                db.collection("users").document(uid).set(adminData)
+                    .addOnSuccessListener {
+                        Toast.makeText(this, "Admin account created successfully", Toast.LENGTH_SHORT).show()
+                        emailEditText.text = null
+                        passwordEditText.text = null
+                        confirmPasswordEditText.text = null
+                        secondaryAuth.signOut()
+                    }
+            }
+            .addOnFailureListener { e ->
+                if (e is FirebaseAuthUserCollisionException) {
+                    emailLayout.error = "This email address is already in use in Authentication."
+                } else {
+                    Toast.makeText(this, e.localizedMessage ?: "Creation failed", Toast.LENGTH_SHORT).show()
+                }
+            }
     }
 
     private fun fetchAdmins() {

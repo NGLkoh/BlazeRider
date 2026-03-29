@@ -11,9 +11,11 @@ import android.widget.LinearLayout
 import android.widget.PopupMenu
 import android.widget.PopupWindow
 import android.widget.TextView
+import android.widget.Toast
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
@@ -21,23 +23,27 @@ import com.bumptech.glide.Glide
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.imageview.ShapeableImageView
+import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import java.text.SimpleDateFormat
 import java.util.*
 
 class PostAdapter(
     private val onDeletePost: (Post) -> Unit,
     private val onCommentClick: (Post) -> Unit,
-    private val isAnnouncement: Boolean = false
+    private val isAnnouncement: Boolean = false,
+    private val isAdminUser: Boolean = false
 ) : RecyclerView.Adapter<PostAdapter.PostViewHolder>() {
 
     private var posts = listOf<Post>()
 
     fun submitPosts(newPosts: List<Post>) {
+        val diffResult = DiffUtil.calculateDiff(PostDiffCallback(posts, newPosts))
         posts = newPosts
-        notifyDataSetChanged()
+        diffResult.dispatchUpdatesTo(this)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PostViewHolder {
@@ -80,22 +86,32 @@ class PostAdapter(
         
         private var currentReaction: String? = null
         private var boundPost: Post? = null
+        private var rideControlsListener: ListenerRegistration? = null
 
         fun bind(post: Post) {
+            val isSamePost = boundPost?.id == post.id
             boundPost = post
-            currentReaction = null
-            updateLikeIcon(null)
+
+            if (!isSamePost) {
+                currentReaction = null
+                updateLikeIcon(null)
+                userName.text = "Loading..."
+                profilePic.setImageResource(R.drawable.ic_anonymous)
+            }
 
             db.collection("users").document(post.userId).get().addOnSuccessListener { document ->
-                if (document.exists()) {
-                    userName.text = "${document.getString("firstName")} ${document.getString("lastName")}"
+                if (document.exists() && boundPost?.id == post.id) {
+                    val name = "${document.getString("firstName")} ${document.getString("lastName")}"
+                    if (userName.text != name) userName.text = name
                     Glide.with(itemView.context).load(document.getString("profileImageUrl"))
                         .placeholder(R.drawable.ic_anonymous).into(profilePic)
                 }
             }
 
-            content.text = post.content
-            timestamp.text = post.createdAt?.let { SimpleDateFormat("MMM dd, yyyy • hh:mm a", Locale.getDefault()).format(it) } ?: ""
+            if (content.text != post.content) content.text = post.content
+            val dateStr = post.createdAt?.let { SimpleDateFormat("MMM dd, yyyy • hh:mm a", Locale.getDefault()).format(it) } ?: ""
+            if (timestamp.text != dateStr) timestamp.text = dateStr
+            
             adminBadge.visibility = if (post.admin) View.VISIBLE else View.GONE
 
             val isMyPost = post.userId == auth.currentUser?.uid
@@ -117,6 +133,7 @@ class PostAdapter(
             } else {
                 rideControlsContainer.visibility = View.GONE
                 btnViewJoinedRiders.visibility = View.GONE
+                rideControlsListener?.remove()
             }
 
             setupImages(post)
@@ -124,9 +141,19 @@ class PostAdapter(
             
             commentContainer.setOnClickListener { onCommentClick(post) }
             
-            likeContainer.setOnClickListener { handleLikeClick() }
+            likeContainer.setOnClickListener { 
+                if (this@PostAdapter.isAdminUser) {
+                    Toast.makeText(itemView.context, "Admin cannot react to posts", Toast.LENGTH_SHORT).show()
+                } else {
+                    handleLikeClick()
+                }
+            }
             likeContainer.setOnLongClickListener {
-                showReactionPicker()
+                if (this@PostAdapter.isAdminUser) {
+                    Toast.makeText(itemView.context, "Admin cannot react to posts", Toast.LENGTH_SHORT).show()
+                } else {
+                    showReactionPicker()
+                }
                 true
             }
             
@@ -140,8 +167,11 @@ class PostAdapter(
                 db.collection("posts").document(post.id).collection("reactions").document(uid).get()
                     .addOnSuccessListener { doc ->
                         if (boundPost?.id == post.id) {
-                            currentReaction = doc.getString("reactionType")
-                            updateLikeIcon(currentReaction)
+                            val reactionType = doc.getString("reactionType")
+                            if (currentReaction != reactionType) {
+                                currentReaction = reactionType
+                                updateLikeIcon(currentReaction)
+                            }
                         }
                     }
             }
@@ -301,6 +331,8 @@ class PostAdapter(
 
             db.runTransaction { transaction ->
                 val postSnapshot = transaction.get(postRef)
+                if (!postSnapshot.exists()) return@runTransaction null
+                
                 val reactionCount = postSnapshot.get("reactionCount") as? Map<String, Any> ?: emptyMap()
                 val updatedCount = reactionCount.toMutableMap()
 
@@ -313,6 +345,8 @@ class PostAdapter(
                 transaction.set(reactionRef, mapOf("reactionType" to newReaction, "timestamp" to FieldValue.serverTimestamp(), "userId" to user.uid))
                 transaction.update(postRef, "reactionCount", updatedCount)
                 null
+            }.addOnFailureListener {
+                if (boundPost?.id == postId) updateLikeIcon(oldReaction)
             }
         }
 
@@ -324,6 +358,8 @@ class PostAdapter(
 
             db.runTransaction { transaction ->
                 val postSnapshot = transaction.get(postRef)
+                if (!postSnapshot.exists()) return@runTransaction null
+                
                 val reactionCount = postSnapshot.get("reactionCount") as? Map<String, Any> ?: emptyMap()
                 val updatedCount = reactionCount.toMutableMap()
 
@@ -335,11 +371,14 @@ class PostAdapter(
                 transaction.delete(reactionRef)
                 transaction.update(postRef, "reactionCount", updatedCount)
                 null
+            }.addOnFailureListener {
+                if (boundPost?.id == postId) updateLikeIcon(oldReaction)
             }
         }
 
         private fun setupRideControls(post: Post) {
-            db.collection("sharedRoutes").document(post.sharedRouteId)
+            rideControlsListener?.remove()
+            rideControlsListener = db.collection("sharedRoutes").document(post.sharedRouteId)
                 .addSnapshotListener { snapshot, _ ->
                     if (snapshot == null || !snapshot.exists()) {
                         rideControlsContainer.visibility = View.GONE
@@ -351,11 +390,9 @@ class PostAdapter(
                         return@addSnapshotListener
                     }
                     rideControlsContainer.visibility = View.VISIBLE
-                    if (status == "ongoing") {
-                        btnStartRoute.text = "Continue Route"
-                    } else {
-                        btnStartRoute.text = "Start Route"
-                    }
+                    val btnText = if (status == "ongoing") "Continue Route" else "Start Route"
+                    if (btnStartRoute.text != btnText) btnStartRoute.text = btnText
+                    
                     btnStartRoute.setOnClickListener {
                         val ride = snapshot.toObject(SharedRide::class.java)?.copy(sharedRoutesId = snapshot.id)
                         if (status != "ongoing") {
@@ -368,10 +405,52 @@ class PostAdapter(
                     }
                     btnCancel.setOnClickListener {
                         showConfirmation("Cancel Ride", "Are you sure you want to cancel this ride event?") {
-                            db.collection("sharedRoutes").document(post.sharedRouteId).update("status", "cancelled")
+                            cancelRideEvent(post.sharedRouteId)
                         }
                     }
                 }
+        }
+
+        private fun cancelRideEvent(rideId: String) {
+            val userId = auth.currentUser?.uid ?: return
+            
+            db.collection("sharedRoutes").document(rideId).get().addOnSuccessListener { snapshot ->
+                val ride = snapshot.toObject(SharedRide::class.java) ?: return@addOnSuccessListener
+                
+                db.runTransaction { transaction ->
+                    val rideRef = db.collection("sharedRoutes").document(rideId)
+                    transaction.update(rideRef, "status", "cancelled")
+                    transaction.update(db.collection("users").document(userId), "currentJoinedRide", null)
+
+                    val cancelledRideHistory = RideHistory(
+                        datetime = Timestamp.now(),
+                        destination = ride.destination,
+                        distance = ride.distance,
+                        duration = ride.duration,
+                        origin = ride.origin,
+                        status = "Cancelled",
+                        userUid = userId,
+                        sharedRoutesId = rideId
+                    )
+                    val historyRef = db.collection("users").document(userId).collection("rideHistory").document()
+                    transaction.set(historyRef, cancelledRideHistory)
+
+                    ride.joinedRiders?.keys?.forEach { riderId ->
+                        transaction.update(db.collection("users").document(riderId), "currentJoinedRide", null)
+                        val notifRef = db.collection("users").document(riderId).collection("notifications").document()
+                        transaction.set(notifRef, mapOf(
+                            "actorId" to userId,
+                            "createdAt" to Timestamp.now(),
+                            "message" to "The ride from ${ride.origin} has been cancelled.",
+                            "type" to "ride_cancelled",
+                            "isRead" to false
+                        ))
+                    }
+                    null
+                }.addOnSuccessListener {
+                    Toast.makeText(itemView.context, "Ride cancelled and logged to history", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
 
         private fun showConfirmation(title: String, message: String, onConfirm: () -> Unit) {
@@ -386,7 +465,9 @@ class PostAdapter(
         private fun setupImages(post: Post) {
             if (post.imageUris.isNotEmpty()) {
                 imageContainer.visibility = View.VISIBLE
-                imageViewPager.adapter = ImagePagerAdapter(post.imageUris)
+                if (imageViewPager.adapter == null || (imageViewPager.adapter as? ImagePagerAdapter)?.urls != post.imageUris) {
+                    imageViewPager.adapter = ImagePagerAdapter(post.imageUris)
+                }
             } else {
                 imageContainer.visibility = View.GONE
             }
@@ -394,8 +475,11 @@ class PostAdapter(
 
         private fun setupReactions(post: Post) {
             val total = post.reactionCount.values.sum()
-            reactionsCount.text = if (total > 0) "$total reactions" else ""
-            commentsCount.text = if (post.commentsCount > 0) "${post.commentsCount} comments" else ""
+            val reactionsText = if (total > 0) "$total reactions" else ""
+            if (reactionsCount.text != reactionsText) reactionsCount.text = reactionsText
+            
+            val commentsText = if (post.commentsCount > 0) "${post.commentsCount} comments" else ""
+            if (commentsCount.text != commentsText) commentsCount.text = commentsText
         }
     }
 
@@ -421,7 +505,18 @@ class PostAdapter(
     }
 }
 
-class ImagePagerAdapter(private val urls: List<String>) : RecyclerView.Adapter<ImagePagerAdapter.ViewHolder>() {
+class PostDiffCallback(private val oldList: List<Post>, private val newList: List<Post>) : DiffUtil.Callback() {
+    override fun getOldListSize(): Int = oldList.size
+    override fun getNewListSize(): Int = newList.size
+    override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+        return oldList[oldItemPosition].id == newList[newItemPosition].id
+    }
+    override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+        return oldList[oldItemPosition] == newList[newItemPosition]
+    }
+}
+
+class ImagePagerAdapter(val urls: List<String>) : RecyclerView.Adapter<ImagePagerAdapter.ViewHolder>() {
     class ViewHolder(v: View) : RecyclerView.ViewHolder(v) { 
         val img = v as ImageView
     }

@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.media.RingtoneManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -80,6 +81,14 @@ class HomeActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Make the app draw under system bars
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
+
         setContentView(R.layout.activity_home)
 
         auth = FirebaseAuth.getInstance()
@@ -95,18 +104,25 @@ class HomeActivity : AppCompatActivity() {
         notificationMessage = notificationBanner.findViewById(R.id.notification_message)
         notificationDismiss = notificationBanner.findViewById(R.id.notification_dismiss)
 
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { view, windowInsets ->
-            val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val systemBarInsets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val navBarInsets = windowInsets.getInsets(WindowInsetsCompat.Type.navigationBars())
+            
             notificationBanner.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                topMargin = insets.top
+                topMargin = systemBarInsets.top
             }
+            
             val fragmentContainer = findViewById<FrameLayout>(R.id.fragment_container)
             fragmentContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                topMargin = if (isStatusBarTransparent()) 0 else insets.top
+                topMargin = if (isStatusBarTransparent()) 0 else systemBarInsets.top
+                bottomMargin = 0 // ConstraintLayout handles this via bottomNav top
             }
-            WindowInsetsCompat.CONSUMED
+
+            // Set padding to the bottom nav so icons stay above system buttons
+            // and the background color extends to the very bottom
+            bottomNav.setPadding(0, 0, 0, navBarInsets.bottom)
+            
+            windowInsets
         }
 
         if (savedInstanceState == null) {
