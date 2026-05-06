@@ -174,21 +174,32 @@ class EventsFragment : Fragment() {
         }
     }
 
+    private var eventDecorator: EventDecorator? = null
+
     private fun loadEventDots() {
         db.collection("posts")
             .whereEqualTo("admin", true)
             .get()
             .addOnSuccessListener { result ->
+                val now = System.currentTimeMillis()
                 val eventDates = HashSet<CalendarDay>()
                 for (document in result) {
-                    val timestamp = document.getTimestamp("createdAt")
-                    if (timestamp != null) {
+                    val isScheduled = document.getBoolean("isScheduled") ?: false
+                    val createdAt = document.getTimestamp("createdAt")
+                    if (createdAt != null) {
+                        // Skip if it's scheduled for the future
+                        if (isScheduled && createdAt.toDate().time > now) continue
+                        
                         val calendar = Calendar.getInstance()
-                        calendar.time = timestamp.toDate()
+                        calendar.time = createdAt.toDate()
                         eventDates.add(CalendarDay.from(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH) + 1, calendar.get(Calendar.DAY_OF_MONTH)))
                     }
                 }
-                calendarView.addDecorator(EventDecorator(Color.parseColor("#E65100"), eventDates))
+                
+                // Remove old decorator before adding new one
+                eventDecorator?.let { calendarView.removeDecorator(it) }
+                eventDecorator = EventDecorator(Color.parseColor("#E65100"), eventDates)
+                calendarView.addDecorator(eventDecorator)
             }
     }
 
@@ -222,8 +233,17 @@ class EventsFragment : Fragment() {
             .get()
             .addOnSuccessListener { result ->
                 if (!isAdded) return@addOnSuccessListener
+                val now = System.currentTimeMillis()
                 val fetchedPosts = result.documents.mapNotNull { document ->
                     try {
+                        val isScheduled = document.getBoolean("isScheduled") ?: false
+                        val createdAt = document.getTimestamp("createdAt")?.toDate()?.time ?: 0L
+
+                        // If it's scheduled and the scheduled post time hasn't arrived, hide it
+                        if (isScheduled && createdAt > now) {
+                            return@mapNotNull null
+                        }
+
                         Post(
                             id = document.id,
                             userId = document.getString("userId") ?: "",

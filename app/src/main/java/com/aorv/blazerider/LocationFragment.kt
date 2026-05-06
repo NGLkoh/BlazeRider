@@ -44,6 +44,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import com.bumptech.glide.Glide
 import com.firebase.geofire.GeoFire
 import com.firebase.geofire.GeoLocation
 import com.google.android.gms.location.FusedLocationProviderClient
@@ -353,8 +354,27 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
             if (checkAudioPermission()) startSpeechToText() else requestAudioPermission()
         }
 
-        view.findViewById<ImageView>(R.id.user_icon).setOnClickListener {
+        val userIcon = view.findViewById<ImageView>(R.id.user_icon)
+        userIcon.setOnClickListener {
             startActivity(Intent(requireContext(), ProfileMenuActivity::class.java))
+        }
+
+        // Load user profile image into search bar icon
+        if (currentUser != null) {
+            firestore.collection("users").document(currentUser.uid).get()
+                .addOnSuccessListener { document ->
+                    if (document.exists()) {
+                        val imageUrl = document.getString("profileImageUrl")
+                        if (!imageUrl.isNullOrEmpty()) {
+                            Glide.with(this)
+                                .load(imageUrl)
+                                .placeholder(R.drawable.ic_user)
+                                .error(R.drawable.ic_user)
+                                .circleCrop()
+                                .into(userIcon)
+                        }
+                    }
+                }
         }
 
         view.findViewById<ImageView>(R.id.close_button).setOnClickListener { clearMarker() }
@@ -567,7 +587,15 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
                 val originAddress = reverseGeocodeFallback(currentLocation!!.latitude, currentLocation!!.longitude)
                 val document = firestore.collection("users").document(userId).get().await()
                 if (document.exists()) {
+                    val firstName = document.getString("firstName") ?: ""
+                    val lastName = document.getString("lastName") ?: ""
+                    val fullName = "$firstName $lastName".trim()
+
                     val myRideRef = firestore.collection("rides").document()
+                    val sharedRouteRef = firestore.collection("sharedRoutes").document()
+
+                    val distanceValue = routeDistance?.replace(" km", "")?.toDoubleOrNull() ?: 0.0
+                    val durationSeconds = parseDurationToSeconds(routeDuration!!)
 
                     val myRideData = hashMapOf(
                         "rideName" to "Ride to $selectedPlaceName",
@@ -582,20 +610,45 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
                         "endLat" to selectedPlaceLat,
                         "endLng" to selectedPlaceLng,
                         "hostId" to userId,
-                        "createdAt" to java.util.Date(scheduleTimestamp),
-                        "distance" to (routeDistance?.replace(" km", "")?.toDoubleOrNull() ?: 0.0),
-                        "duration" to parseDurationToSeconds(routeDuration!!),
+                        "createdAt" to java.util.Date(),
+                        "distance" to distanceValue,
+                        "duration" to durationSeconds,
                         "isScheduled" to true,
-                        "originalSharedRouteId" to null,
+                        "originalSharedRouteId" to sharedRouteRef.id,
                         "status" to "active"
                     )
-                    myRideRef.set(myRideData).await()
+
+                    val sharedRideData = hashMapOf(
+                        "datetime" to com.google.firebase.Timestamp(java.util.Date(scheduleTimestamp)),
+                        "createdAt" to FieldValue.serverTimestamp(),
+                        "destination" to selectedPlaceName,
+                        "destinationCoordinates" to mapOf("latitude" to selectedPlaceLat, "longitude" to selectedPlaceLng),
+                        "distance" to distanceValue,
+                        "duration" to durationSeconds.toDouble(),
+                        "origin" to originAddress,
+                        "originCoordinates" to mapOf("latitude" to currentLocation!!.latitude, "longitude" to currentLocation!!.longitude),
+                        "userName" to fullName,
+                        "userUid" to userId,
+                        "isAdminEvent" to false,
+                        "isScheduled" to true,
+                        "isPublic" to true,
+                        "status" to "active",
+                        "originalRideId" to myRideRef.id
+                    )
+
+                    val batch = firestore.batch()
+                    batch.set(myRideRef, myRideData)
+                    batch.set(sharedRouteRef, sharedRideData)
+                    // Note: We don't set currentJoinedRide here to keep the user "free" until the ride starts.
+
+                    batch.commit().await()
                     
                     val delay = scheduleTimestamp - System.currentTimeMillis()
                     if (delay > 0) {
                         val data = Data.Builder()
                             .putString("rideId", myRideRef.id)
                             .putString("userId", userId)
+                            .putString("sharedRouteId", sharedRouteRef.id)
                             .build()
 
                         val workRequest = OneTimeWorkRequestBuilder<ScheduledRideShareWorker>()
@@ -605,7 +658,7 @@ class LocationFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMapClickLis
                         WorkManager.getInstance(requireContext()).enqueue(workRequest)
                     }
 
-                    Toast.makeText(requireContext(), "Ride scheduled successfully for sharing", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), "Ride scheduled and shared successfully", Toast.LENGTH_SHORT).show()
                     val intent = Intent(requireContext(), SharedRidesActivity::class.java)
                     intent.putExtra("SELECT_TAB", 1)
                     startActivity(intent)

@@ -102,9 +102,20 @@ class NotificationsFragment : Fragment() {
                                 if (notification.type == "weather") "Weather Update"
                                 else notification.type.replaceFirstChar { it.titlecase(Locale.getDefault()) }
                             }
+
+                            val message = if (notification.message.isEmpty()) {
+                                when (notification.type) {
+                                    "reaction" -> "reacted to your post"
+                                    "comment" -> "commented on your post"
+                                    else -> ""
+                                }
+                            } else {
+                                notification.message
+                            }
+
                             DisplayNotification(
                                 title = title,
-                                message = notification.message,
+                                message = message,
                                 isRead = notification.isRead,
                                 original = notification
                             )

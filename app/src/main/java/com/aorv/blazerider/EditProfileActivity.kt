@@ -21,7 +21,9 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import android.util.Log
 import com.android.volley.Request
+import com.android.volley.RequestQueue
 import com.android.volley.toolbox.JsonArrayRequest
 import com.android.volley.toolbox.Volley
 import com.google.android.material.appbar.MaterialToolbar
@@ -52,9 +54,18 @@ class EditProfileActivity : AppCompatActivity() {
     private var selectedCityCode: String? = null
     private var isAdminUser: Boolean = false
 
+    private var pendingProvince: String? = null
+    private var pendingCity: String? = null
+    private var pendingBarangay: String? = null
+
+    private lateinit var requestQueue: RequestQueue
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_edit_profile)
+
+        // Initialize Volley RequestQueue
+        requestQueue = Volley.newRequestQueue(this)
 
         // Disable edge-to-edge and set status bar color
         WindowCompat.setDecorFitsSystemWindows(window, true)
@@ -114,23 +125,29 @@ class EditProfileActivity : AppCompatActivity() {
 
         // Province dropdown listener
         provinceDropdown.setOnItemClickListener { _, _, position, _ ->
-            selectedProvinceCode = provinces[position].second
-            cityDropdown.isEnabled = true
-            cities.clear()
-            barangays.clear()
-            cityDropdown.setText("")
-            barangayDropdown.setText("")
-            barangayDropdown.isEnabled = false
-            fetchCities(selectedProvinceCode!!)
+            val selectedProvince = provinces.getOrNull(position)
+            if (selectedProvince != null) {
+                selectedProvinceCode = selectedProvince.second
+                cityDropdown.isEnabled = true
+                cities.clear()
+                barangays.clear()
+                cityDropdown.setText("")
+                barangayDropdown.setText("")
+                barangayDropdown.isEnabled = false
+                selectedProvinceCode?.let { fetchCities(it) }
+            }
         }
 
         // City dropdown listener
         cityDropdown.setOnItemClickListener { _, _, position, _ ->
-            selectedCityCode = cities[position].second
-            barangayDropdown.isEnabled = true
-            barangays.clear()
-            barangayDropdown.setText("")
-            fetchBarangays(selectedProvinceCode!!, selectedCityCode!!)
+            val selectedCity = cities.getOrNull(position)
+            if (selectedCity != null) {
+                selectedCityCode = selectedCity.second
+                barangayDropdown.isEnabled = true
+                barangays.clear()
+                barangayDropdown.setText("")
+                selectedCityCode?.let { fetchBarangays(it) }
+            }
         }
 
         // Birthdate picker
@@ -161,7 +178,7 @@ class EditProfileActivity : AppCompatActivity() {
         // Smooth scrolling for input fields
         val fields = listOf(firstName, lastName, birthdate, gender, provinceDropdown, cityDropdown, barangayDropdown, address)
         fields.forEach { field ->
-            field.setOnFocusChangeListener { _, hasFocus ->
+            field?.setOnFocusChangeListener { _, hasFocus ->
                 if (hasFocus) {
                     scrollView.postDelayed({
                         val rect = Rect()
@@ -197,32 +214,24 @@ class EditProfileActivity : AppCompatActivity() {
                         lastName.setText(document.getString("lastName"))
                         
                         if (!isAdminUser) {
-                            document.getTimestamp("birthdate")?.let { timestamp ->
+                            val birthdateVal = document.get("birthdate")
+                            if (birthdateVal is com.google.firebase.Timestamp) {
                                 val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
-                                birthdate.setText(dateFormat.format(timestamp.toDate()))
+                                birthdate.setText(dateFormat.format(birthdateVal.toDate()))
+                            } else if (birthdateVal is String) {
+                                birthdate.setText(birthdateVal)
                             }
+                            
                             gender.setText(document.getString("gender"), false)
-                            val province = document.getString("province")
-                            val city = document.getString("city")
-                            val barangay = document.getString("barangay")
                             address.setText(document.getString("address"))
                             
-                            province?.let {
-                                provinceDropdown.setText(it, false)
-                                selectedProvinceCode = provinces.find { p -> p.first == it }?.second
-                                if (selectedProvinceCode != null) {
-                                    fetchCities(selectedProvinceCode!!)
-                                    city?.let {
-                                        cityDropdown.setText(it, false)
-                                        selectedCityCode = cities.find { c -> c.first == it }?.second
-                                        if (selectedCityCode != null) {
-                                            fetchBarangays(selectedProvinceCode!!, selectedCityCode!!)
-                                            barangay?.let {
-                                                barangayDropdown.setText(it, false)
-                                            }
-                                        }
-                                    }
-                                }
+                            pendingProvince = document.getString("province")
+                            pendingCity = document.getString("city")
+                            pendingBarangay = document.getString("barangay")
+
+                            // If provinces are already loaded, trigger the chain
+                            if (provinces.isNotEmpty() && pendingProvince != null) {
+                                applyPendingProvince()
                             }
                         }
 
@@ -295,6 +304,10 @@ class EditProfileActivity : AppCompatActivity() {
 
             val user = auth.currentUser
             if (user != null) {
+                // Show loading and disable button
+                findViewById<ProgressBar>(R.id.loadingProgressBar).visibility = View.VISIBLE
+                btnSaveChanges.isEnabled = false
+
                 val userData = mutableMapOf<String, Any>(
                     "firstName" to firstName.text.toString(),
                     "lastName" to lastName.text.toString()
@@ -359,16 +372,51 @@ class EditProfileActivity : AppCompatActivity() {
         // Use update instead of set to avoid overwriting other fields like 'admin'
         db.collection("users").document(uid).update(userData)
             .addOnSuccessListener {
+                findViewById<ProgressBar>(R.id.loadingProgressBar).visibility = View.GONE
                 Toast.makeText(this, "Profile updated successfully.", Toast.LENGTH_SHORT).show()
                 finish()
             }
             .addOnFailureListener {
+                findViewById<ProgressBar>(R.id.loadingProgressBar).visibility = View.GONE
+                findViewById<Button>(R.id.btnSaveChanges).isEnabled = true
                 Toast.makeText(this, "Failed to update profile.", Toast.LENGTH_SHORT).show()
             }
     }
 
+    private fun applyPendingProvince() {
+        pendingProvince?.let { provinceName ->
+            val match = provinces.find { it.first.equals(provinceName, ignoreCase = true) }
+            if (match != null) {
+                provinceDropdown.setText(match.first, false)
+                selectedProvinceCode = match.second
+                selectedProvinceCode?.let { fetchCities(it) }
+            }
+        }
+    }
+
+    private fun applyPendingCity() {
+        pendingCity?.let { cityName ->
+            val match = cities.find { it.first.equals(cityName, ignoreCase = true) }
+            if (match != null) {
+                cityDropdown.setText(match.first, false)
+                selectedCityCode = match.second
+                cityDropdown.isEnabled = true
+                selectedCityCode?.let { fetchBarangays(it) }
+            }
+        }
+    }
+
+    private fun applyPendingBarangay() {
+        pendingBarangay?.let { barangayName ->
+            val match = barangays.find { it.equals(barangayName, ignoreCase = true) }
+            if (match != null) {
+                barangayDropdown.setText(match, false)
+                barangayDropdown.isEnabled = true
+            }
+        }
+    }
+
     private fun fetchProvinces() {
-        val queue = Volley.newRequestQueue(this)
         val url = "https://psgc.gitlab.io/api/provinces"
         findViewById<ProgressBar>(R.id.loadingProgressBar).visibility = View.VISIBLE
 
@@ -376,88 +424,120 @@ class EditProfileActivity : AppCompatActivity() {
             Request.Method.GET, url, null,
             { response ->
                 provinces.clear()
+                val tempProvinces = mutableListOf<Pair<String, String>>()
                 for (i in 0 until response.length()) {
                     val province = response.getJSONObject(i)
                     val name = province.getString("name")
                     val code = province.getString("code")
-                    provinces.add(name to code)
+                    tempProvinces.add(name to code)
                 }
+                
+                // Add Metro Manila (NCR) manually as it is not technically a province
+                tempProvinces.add("Metro Manila" to "130000000")
+                
+                // Sort provinces alphabetically
+                provinces.addAll(tempProvinces.sortedBy { it.first })
+
                 val provinceNames = provinces.map { it.first }
                 provinceDropdown.setAdapter(
                     ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, provinceNames)
                 )
                 findViewById<ProgressBar>(R.id.loadingProgressBar).visibility = View.GONE
+                
+                if (pendingProvince != null) {
+                    applyPendingProvince()
+                }
             },
             { error ->
-                Toast.makeText(this, "Failed to fetch provinces: ${error.message}", Toast.LENGTH_SHORT).show()
+                Log.e("EditProfile", "Failed to fetch provinces", error)
+                Toast.makeText(this, "Failed to fetch provinces. Please check your connection.", Toast.LENGTH_SHORT).show()
                 findViewById<ProgressBar>(R.id.loadingProgressBar).visibility = View.GONE
             }
         )
-        queue.add(jsonArrayRequest)
+        requestQueue.add(jsonArrayRequest)
     }
 
     private fun fetchCities(provinceCode: String) {
-        val queue = Volley.newRequestQueue(this)
-        val url = "https://psgc.gitlab.io/api/provinces/$provinceCode/cities-municipalities"
+        // If Metro Manila (NCR), use regions endpoint to get cities, otherwise use provinces endpoint
+        val url = if (provinceCode == "130000000") {
+            "https://psgc.gitlab.io/api/regions/130000000/cities-municipalities"
+        } else {
+            "https://psgc.gitlab.io/api/provinces/$provinceCode/cities-municipalities"
+        }
         findViewById<ProgressBar>(R.id.loadingProgressBar).visibility = View.VISIBLE
 
         val jsonArrayRequest = JsonArrayRequest(
             Request.Method.GET, url, null,
             { response ->
                 cities.clear()
+                val tempCities = mutableListOf<Pair<String, String>>()
                 for (i in 0 until response.length()) {
                     val city = response.getJSONObject(i)
                     val name = city.getString("name")
                     val code = city.getString("code")
-                    cities.add(name to code)
+                    tempCities.add(name to code)
                 }
+                
+                // Sort cities alphabetically
+                cities.addAll(tempCities.sortedBy { it.first })
+
                 val cityNames = cities.map { it.first }
                 cityDropdown.setAdapter(
                     ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, cityNames)
                 )
                 cityDropdown.isEnabled = true
                 findViewById<ProgressBar>(R.id.loadingProgressBar).visibility = View.GONE
+
+                if (pendingCity != null) {
+                    applyPendingCity()
+                }
             },
             { error ->
-                Toast.makeText(this, "Failed to fetch cities: ${error.message}", Toast.LENGTH_SHORT).show()
+                Log.e("EditProfile", "Failed to fetch cities", error)
+                Toast.makeText(this, "Failed to fetch cities.", Toast.LENGTH_SHORT).show()
                 cityDropdown.isEnabled = false
                 findViewById<ProgressBar>(R.id.loadingProgressBar).visibility = View.GONE
             }
         )
-        queue.add(jsonArrayRequest)
+        requestQueue.add(jsonArrayRequest)
     }
 
-    private fun fetchBarangays(provinceCode: String, cityCode: String) {
-        val queue = Volley.newRequestQueue(this)
-        val url = "https://psgc.gitlab.io/api/provinces/$provinceCode/barangays"
+    private fun fetchBarangays(cityCode: String) {
+        val url = "https://psgc.gitlab.io/api/cities-municipalities/$cityCode/barangays"
         findViewById<ProgressBar>(R.id.loadingProgressBar).visibility = View.VISIBLE
 
         val jsonArrayRequest = JsonArrayRequest(
             Request.Method.GET, url, null,
             { response ->
                 barangays.clear()
+                val tempBarangays = mutableListOf<String>()
                 for (i in 0 until response.length()) {
                     val barangay = response.getJSONObject(i)
-                    val cityCodeFromJson = barangay.optString("cityCode", "")
-                    val municipalityCode = barangay.optString("municipalityCode", "")
-                    if (cityCodeFromJson == cityCode || municipalityCode == cityCode) {
-                        val name = barangay.getString("name")
-                        barangays.add(name)
-                    }
+                    val name = barangay.getString("name")
+                    tempBarangays.add(name)
                 }
+                
+                // Sort barangays alphabetically
+                barangays.addAll(tempBarangays.sorted())
+
                 barangayDropdown.setAdapter(
                     ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, barangays)
                 )
                 barangayDropdown.isEnabled = true
                 findViewById<ProgressBar>(R.id.loadingProgressBar).visibility = View.GONE
+
+                if (pendingBarangay != null) {
+                    applyPendingBarangay()
+                }
             },
             { error ->
-                Toast.makeText(this, "Failed to fetch barangays: ${error.message}", Toast.LENGTH_SHORT).show()
+                Log.e("EditProfile", "Failed to fetch barangays", error)
+                Toast.makeText(this, "Failed to fetch barangays.", Toast.LENGTH_SHORT).show()
                 barangayDropdown.isEnabled = false
                 findViewById<ProgressBar>(R.id.loadingProgressBar).visibility = View.GONE
             }
         )
-        queue.add(jsonArrayRequest)
+        requestQueue.add(jsonArrayRequest)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

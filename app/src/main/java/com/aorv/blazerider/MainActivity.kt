@@ -86,6 +86,7 @@ class MainActivity : AppCompatActivity() {
             
             // Special handling for the hardcoded admin user ID
             if (currentUser.uid == "A7USXq3qwFgCH4sov6mmPdtaGOn2") {
+                Log.d(TAG, "Super-admin detected, redirecting to AdminActivity")
                 startActivity(Intent(this, AdminActivity::class.java))
                 finish()
                 return
@@ -121,6 +122,7 @@ class MainActivity : AppCompatActivity() {
                             Log.d(TAG, "You are an admin, redirecting to AdminActivity")
                             startActivity(Intent(this, AdminActivity::class.java))
                             finish()
+                            return@addOnSuccessListener
                         } else if (verified) {
                             Log.d(TAG, "User is verified, checking for active ride")
                             val currentJoinedRide = document.getString("currentJoinedRide")

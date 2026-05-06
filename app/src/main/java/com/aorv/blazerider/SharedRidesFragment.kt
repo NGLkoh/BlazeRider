@@ -51,6 +51,8 @@ class SharedRidesFragment : Fragment() {
     }
 
     private fun fetchSharedRides() {
+        val currentUserId = auth.currentUser?.uid
+        
         firestore.collection("sharedRoutes")
             .orderBy("datetime", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
@@ -62,25 +64,17 @@ class SharedRidesFragment : Fragment() {
                 val rides: List<SharedRide> = snapshot?.documents?.mapNotNull { doc ->
                     try {
                         val ride = doc.toObject<SharedRide>()?.copy(sharedRoutesId = doc.id)
-                        
-                        // Extract isPublic directly from the document to avoid mapping issues
-                        val isPublicDoc = doc.getBoolean("isPublic") ?: true
-                        
-                        // We filter here, but we can also store it in the ride object
-                        // To be safe, we return the ride only if it's public
-                        if (isPublicDoc) ride else null
+                        ride
                     } catch (e: Exception) {
                         Log.e(TAG, "Exception parsing document ${doc.id}: ${e.message}")
                         null
                     }
                 } ?: emptyList()
 
-                val now = Timestamp.now()
                 val visibleRides = rides.filter { ride ->
                     val isStatusActive = ride.status != "completed" && ride.status != "cancelled"
-                    val isVisible = !ride.isScheduled || (ride.createdAt != null && ride.createdAt.seconds <= now.seconds)
-                    
-                    isStatusActive && isVisible
+                    // Only show rides that are not currently waiting for a scheduled publication
+                    isStatusActive && !ride.isScheduled
                 }
                 
                 noSharedRidesText.visibility = if (visibleRides.isEmpty()) View.VISIBLE else View.GONE
@@ -142,31 +136,31 @@ class SharedRidesFragment : Fragment() {
                     cardView?.strokeWidth = 4
 
                     val white = ContextCompat.getColor(itemView.context, R.color.white)
-                    binding.riderName.setTextColor(white)
-                    binding.dateCreated.setTextColor(white)
-                    binding.origin.setTextColor(white)
-                    binding.destination.setTextColor(white)
-                    binding.distance.setTextColor(white)
-                    binding.duration.setTextColor(white)
-                    binding.rideNumbers.setTextColor(white)
+                    binding.riderName.setTextColor(white as Int)
+                    binding.dateCreated.setTextColor(white as Int)
+                    binding.origin.setTextColor(white as Int)
+                    binding.destination.setTextColor(white as Int)
+                    binding.distance.setTextColor(white as Int)
+                    binding.duration.setTextColor(white as Int)
+                    binding.rideNumbers.setTextColor(white as Int)
                     
                     binding.originIcon.setColorFilter(white)
                     binding.destinationIcon.setColorFilter(white)
                     binding.distanceIcon.setColorFilter(white)
                     binding.durationIcon.setColorFilter(white)
-                    binding.liveText.setTextColor(white)
+                    binding.liveText.setTextColor(white as Int)
                 } else {
                     binding.currentRideCard.setCardBackgroundColor(ContextCompat.getColor(itemView.context, R.color.white))
                     cardView?.strokeWidth = 0
 
-                    binding.riderName.setTextColor(ContextCompat.getColor(itemView.context, R.color.black))
-                    binding.dateCreated.setTextColor(ContextCompat.getColor(itemView.context, R.color.gray))
+                    binding.riderName.setTextColor(ContextCompat.getColor(itemView.context, R.color.black) as Int)
+                    binding.dateCreated.setTextColor(ContextCompat.getColor(itemView.context, R.color.gray) as Int)
                     val black = ContextCompat.getColor(itemView.context, R.color.black)
-                    binding.origin.setTextColor(black)
-                    binding.destination.setTextColor(black)
-                    binding.distance.setTextColor(black)
-                    binding.duration.setTextColor(black)
-                    binding.rideNumbers.setTextColor(black)
+                    binding.origin.setTextColor(black as Int)
+                    binding.destination.setTextColor(black as Int)
+                    binding.distance.setTextColor(black as Int)
+                    binding.duration.setTextColor(black as Int)
+                    binding.rideNumbers.setTextColor(black as Int)
 
                     val darkGray = ContextCompat.getColor(itemView.context, R.color.dark_gray)
                     binding.originIcon.setColorFilter(darkGray)
@@ -174,14 +168,16 @@ class SharedRidesFragment : Fragment() {
                     binding.distanceIcon.setColorFilter(darkGray)
                     binding.durationIcon.setColorFilter(darkGray)
                     
-                    binding.liveText.setTextColor(ContextCompat.getColor(itemView.context, android.R.color.holo_red_dark))
+                    binding.liveText.setTextColor(ContextCompat.getColor(itemView.context, android.R.color.holo_red_dark) as Int)
                 }
 
                 ride.userUid?.let { uid ->
                     firestore.collection("users").document(uid).get()
                         .addOnSuccessListener { userDoc ->
                             val user = userDoc.toObject<User>()
-                            binding.riderName.text = if (ride.isAdminEvent) "OFFICIAL EVENT: ${user?.firstName} ${user?.lastName}" else "${user?.firstName} ${user?.lastName}"
+                            val firstName = user?.firstName ?: "Unknown"
+                            val lastName = user?.lastName ?: "User"
+                            binding.riderName.text = if (ride.isAdminEvent) "OFFICIAL EVENT: $firstName $lastName" else "$firstName $lastName"
                             Glide.with(binding.profilePicture.context)
                                 .load(user?.profileImageUrl ?: R.drawable.ic_anonymous)
                                 .into(binding.profilePicture)
@@ -206,13 +202,26 @@ class SharedRidesFragment : Fragment() {
                 binding.distance.text = "Distance: ${ride.distance?.let { String.format("%.2f km", it) } ?: "Unknown"}"
                 binding.duration.text = "Duration: ${formatDuration(ride.duration)}"
 
+                val now = System.currentTimeMillis()
+                val rideTime = ride.datetime?.toDate()?.time ?: 0L
                 val ridersCount = ride.joinedRiders?.size ?: 0
-                binding.rideNumbers.text = "$ridersCount joined"
-
+                
                 if (ride.status == "ongoing") {
+                    binding.rideNumbers.text = "$ridersCount joined"
                     binding.liveIndicator.visibility = View.VISIBLE
+                    binding.liveIndicator.setBackgroundResource(R.drawable.red_pulse_dot)
                     binding.liveText.visibility = View.VISIBLE
+                    binding.liveText.text = "LIVE"
+                    binding.liveText.setTextColor(ContextCompat.getColor(itemView.context, android.R.color.holo_red_dark) as Int)
+                } else if (now < rideTime) {
+                    binding.rideNumbers.text = "Scheduled"
+                    binding.liveIndicator.visibility = View.VISIBLE
+                    binding.liveIndicator.setBackgroundResource(R.drawable.yellow_dot)
+                    binding.liveText.visibility = View.VISIBLE
+                    binding.liveText.text = "SCHEDULED"
+                    binding.liveText.setTextColor(ContextCompat.getColor(itemView.context, R.color.orange) as Int)
                 } else {
+                    binding.rideNumbers.text = "$ridersCount joined"
                     binding.liveIndicator.visibility = View.GONE
                     binding.liveText.visibility = View.GONE
                 }
@@ -233,16 +242,37 @@ class SharedRidesFragment : Fragment() {
 
                 if (isRideCreator) {
                     binding.cancelRideBtn.visibility = View.VISIBLE
-                    binding.startRouteBtn.visibility = View.VISIBLE
-                    binding.startRouteBtn.text = if (ride.status == "ongoing") "Continue Route" else "Start Route"
+                    val now = System.currentTimeMillis()
+                    val rideTime = ride.datetime?.toDate()?.time ?: 0L
+                    
+                    if (ride.status == "ongoing") {
+                        binding.startRouteBtn.visibility = View.VISIBLE
+                        binding.startRouteBtn.text = "Continue Route"
+                    } else {
+                        // Only allow starting if the ride time has arrived
+                        if (now >= rideTime) {
+                            binding.startRouteBtn.visibility = View.VISIBLE
+                            binding.startRouteBtn.text = "Start Route"
+                        } else {
+                            binding.startRouteBtn.visibility = View.GONE
+                        }
+                    }
                 } else if (isRiderJoined) {
                     binding.leaveRideBtn.visibility = View.VISIBLE
                     if (ride.status == "ongoing") {
                         binding.startRouteBtn.visibility = View.VISIBLE
                         binding.startRouteBtn.text = "Track Navigation"
+                    } else {
+                        binding.startRouteBtn.visibility = View.GONE
                     }
                 } else {
                     binding.joinRideBtn.visibility = View.VISIBLE
+                    val now = System.currentTimeMillis()
+                    val rideTime = ride.datetime?.toDate()?.time ?: 0L
+                    if (now < rideTime) {
+                        binding.joinRideBtn.isEnabled = true
+                        binding.joinRideBtn.text = "Join Scheduled Ride"
+                    }
                 }
 
                 binding.root.setOnClickListener { openPreview(ride) }

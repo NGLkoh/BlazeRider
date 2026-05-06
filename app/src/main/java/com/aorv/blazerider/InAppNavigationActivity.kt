@@ -162,6 +162,13 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
             }
         }
 
+        if (currentRide != null && currentRide?.userUid == auth.currentUser?.uid && currentRide?.status != "ongoing") {
+            currentRide?.sharedRoutesId?.let { id ->
+                firestore.collection("sharedRoutes").document(id)
+                    .update("status", "ongoing")
+            }
+        }
+
         initLocationCallback()
         startListeningToLiveLocations()
     }
@@ -459,25 +466,42 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
             }
         }
 
-        if (distanceInMeters < 50) {
-            binding.textStatus.text = "Status: Arrived!"
-            binding.textStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
+        if (distanceInMeters < 10) {
+            binding.textStatus.text = "Status: Ride Completed!"
+            binding.textStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark) as Int)
             hasArrived = true
             
             if (currentRide != null) {
                 completeRide(currentRide!!)
             } else {
                 logNavigationToHistory("Completed")
-                Toast.makeText(this, "You have arrived!", Toast.LENGTH_SHORT).show()
+                // Create a notification for the individual ride completion so Home screen shows the banner
+                val userId = auth.currentUser?.uid
+                if (userId != null) {
+                    firestore.collection("users").document(userId).collection("notifications").add(mapOf(
+                        "actorId" to userId,
+                        "createdAt" to Timestamp.now(),
+                        "title" to "Destination Reached",
+                        "message" to "You have arrived at $destName.",
+                        "type" to "ride_arrived",
+                        "isRead" to false
+                    ))
+                }
+                
+                Toast.makeText(this, "You have arrived! Ride completed.", Toast.LENGTH_LONG).show()
+                val intent = Intent(this, HomeActivity::class.java)
+                intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                startActivity(intent)
+                finish()
             }
             stopLocationUpdates()
         }
     }
 
     private fun startLocationUpdates() {
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3000)
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000)
             .setWaitForAccurateLocation(true)
-            .setMinUpdateIntervalMillis(2000)
+            .setMinUpdateIntervalMillis(500)
             .build()
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
@@ -548,7 +572,10 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
                     val durationVal = leg.getJSONObject("duration").getInt("value")
                     val steps = leg.getJSONArray("steps")
                     val currentStep = steps.getJSONObject(0)
-                    val htmlInstruction = currentStep.getString("html_instructions").replace("<[^>]*>".toRegex(), "")
+                    val rawInstruction = currentStep.getString("html_instructions")
+                    val htmlInstruction = android.text.Html.fromHtml(rawInstruction, android.text.Html.FROM_HTML_MODE_LEGACY).toString()
+                        .replace("Restricted usage road", "")
+                        .trim()
                     
                     val points = PolyUtil.decode(route.getJSONObject("overview_polyline").getString("points"))
                     
@@ -600,6 +627,15 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
         val rideRef = firestore.collection("sharedRoutes").document(rideId)
         if (isRideCreator) {
             batch.update(rideRef, "status", "completed")
+            // Also update the private rides collection if it's a scheduled ride
+            firestore.collection("rides")
+                .whereEqualTo("originalSharedRouteId", rideId)
+                .get()
+                .addOnSuccessListener { snapshot ->
+                    for (doc in snapshot.documents) {
+                        doc.reference.update("status", "completed")
+                    }
+                }
         } else {
             batch.update(rideRef, "joinedRiders.$userId", FieldValue.delete())
         }
@@ -607,6 +643,7 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
         batch.set(firestore.collection("users").document(userId).collection("notifications").document(), mapOf(
             "actorId" to userId,
             "createdAt" to Timestamp.now(),
+            "title" to "Ride Completed",
             "message" to "You have arrived at your destination for the ride to ${ride.destination}.",
             "type" to "ride_arrived",
             "isRead" to false
@@ -614,6 +651,10 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
 
         batch.commit().addOnSuccessListener {
             Toast.makeText(this, "Ride completed!", Toast.LENGTH_SHORT).show()
+            val intent = Intent(this, HomeActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            startActivity(intent)
+            finish()
         }
     }
 

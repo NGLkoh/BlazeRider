@@ -79,11 +79,15 @@
 
             <!-- Profile -->
             <LinearLayout
+                android:id="@+id/menu_profile"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:paddingVertical="12dp"
-                android:gravity="center_vertical">
+                android:gravity="center_vertical"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackground">
 
                 <ImageView
                     android:layout_width="24dp"
@@ -102,11 +106,15 @@
 
             <!-- History -->
             <LinearLayout
+                android:id="@+id/menu_history"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:paddingVertical="12dp"
-                android:gravity="center_vertical">
+                android:gravity="center_vertical"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackground">
 
                 <ImageView
                     android:layout_width="24dp"
@@ -125,11 +133,15 @@
 
             <!-- Shared Rides -->
             <LinearLayout
+                android:id="@+id/menu_shared_rides"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:paddingVertical="12dp"
-                android:gravity="center_vertical">
+                android:gravity="center_vertical"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackground">
 
                 <ImageView
                     android:layout_width="24dp"
@@ -148,11 +160,15 @@
 
             <!-- Help and Feedback -->
             <LinearLayout
+                android:id="@+id/menu_help"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:paddingVertical="12dp"
-                android:gravity="center_vertical">
+                android:gravity="center_vertical"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackground">
 
                 <ImageView
                     android:layout_width="24dp"
@@ -171,11 +187,15 @@
 
             <!-- Logout -->
             <LinearLayout
+                android:id="@+id/menu_logout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:paddingVertical="12dp"
-                android:gravity="center_vertical">
+                android:gravity="center_vertical"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackground">
 
                 <ImageView
                     android:layout_width="24dp"

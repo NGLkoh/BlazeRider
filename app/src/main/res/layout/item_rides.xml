@@ -17,18 +17,18 @@
         <!-- User Status with Ride Numbers and LIVE indicator -->
         <LinearLayout
             android:id="@+id/user_status_container"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
             android:orientation="horizontal"
-            android:gravity="center_vertical"
+            android:gravity="center_vertical|end"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintEnd_toEndOf="parent">
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@+id/profile_picture">
 
             <ImageView
                 android:id="@+id/view_riders_btn"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
                 android:layout_marginEnd="8dp"
                 android:src="@drawable/ic_info"
                 android:visibility="gone"
@@ -40,7 +40,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="3 Riders"
-                android:textAppearance="@style/TextAppearance.Material3.BodyMedium" />
+                android:textAppearance="@style/TextAppearance.Material3.BodySmall" />
 
             <View
                 android:id="@+id/live_indicator"
@@ -48,8 +48,7 @@
                 android:layout_height="8dp"
                 android:visibility="gone"
                 android:layout_marginStart="8dp"
-                android:background="@drawable/red_pulse_dot"
-                android:contentDescription="Live ride indicator" />
+                android:background="@drawable/red_pulse_dot" />
 
             <TextView
                 android:id="@+id/live_text"
@@ -58,8 +57,9 @@
                 android:layout_marginStart="4dp"
                 android:text="LIVE"
                 android:visibility="gone"
+                android:textStyle="bold"
                 android:textColor="@android:color/holo_red_dark"
-                android:textAppearance="@style/TextAppearance.Material3.BodyMedium" />
+                android:textAppearance="@style/TextAppearance.Material3.BodySmall" />
         </LinearLayout>
 
         <!-- Profile Picture -->
@@ -71,7 +71,7 @@
             android:scaleType="centerCrop"
             android:src="@drawable/ic_anonymous"
             app:shapeAppearanceOverlay="@style/RoundedImage"
-            app:layout_constraintTop_toBottomOf="@id/user_status_container"
+            app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toStartOf="parent" />
 
         <TextView
@@ -80,10 +80,12 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:text="Name"
+            android:textStyle="bold"
             android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
             app:layout_constraintTop_toBottomOf="@id/user_status_container"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toEndOf="@id/profile_picture" />
+            app:layout_constraintStart_toEndOf="@id/profile_picture"
+            app:layout_goneMarginTop="0dp" />
 
         <TextView
             android:id="@+id/date_created"
@@ -92,7 +94,7 @@
             android:layout_marginTop="2dp"
             android:text="Date Created"
             android:textColor="@color/gray"
-            android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+            android:textAppearance="@style/TextAppearance.Material3.BodySmall"
             app:layout_constraintTop_toBottomOf="@id/rider_name"
             app:layout_constraintStart_toStartOf="@id/rider_name"
             app:layout_constraintEnd_toEndOf="parent" />
@@ -100,17 +102,19 @@
         <!-- Origin -->
         <LinearLayout
             android:id="@+id/origin_container"
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="8dp"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            app:layout_constraintTop_toBottomOf="@id/date_created">
+            app:layout_constraintTop_toBottomOf="@id/date_created"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
 
             <ImageView
                 android:id="@+id/origin_icon"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
                 android:contentDescription="Origin icon"
                 android:src="@drawable/ic_start_pin_point"
                 app:tint="@color/dark_gray" />
@@ -122,23 +126,27 @@
                 android:layout_marginStart="8dp"
                 android:layout_weight="1"
                 android:text="Origin:"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:textAppearance="@style/TextAppearance.Material3.BodyMedium" />
         </LinearLayout>
 
         <!-- Destination -->
         <LinearLayout
             android:id="@+id/destination_container"
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
+            android:layout_marginTop="8dp"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            app:layout_constraintTop_toBottomOf="@id/origin_container">
+            app:layout_constraintTop_toBottomOf="@id/origin_container"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
 
             <ImageView
                 android:id="@+id/destination_icon"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
                 android:src="@drawable/ic_end_pin_point"
                 android:contentDescription="Destination icon"
                 app:tint="@color/dark_gray" />
@@ -150,74 +158,74 @@
                 android:layout_marginStart="8dp"
                 android:layout_weight="1"
                 android:text="Destination:"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:textAppearance="@style/TextAppearance.Material3.BodyMedium" />
         </LinearLayout>
 
-        <!-- Distance -->
+        <!-- Distance & Duration (Side by Side for responsiveness) -->
         <LinearLayout
-            android:id="@+id/distance_container"
-            android:layout_width="match_parent"
+            android:id="@+id/stats_container"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
+            android:layout_marginTop="8dp"
             android:orientation="horizontal"
-            android:gravity="center_vertical"
-            app:layout_constraintTop_toBottomOf="@id/destination_container">
+            app:layout_constraintTop_toBottomOf="@id/destination_container"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
 
-            <ImageView
-                android:id="@+id/distance_icon"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_ruler_horizontal"
-                android:contentDescription="Distance icon"
-                app:tint="@color/dark_gray" />
-
-            <TextView
-                android:id="@+id/distance"
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
                 android:layout_weight="1"
-                android:text="Distance:"
-                android:textAppearance="@style/TextAppearance.Material3.BodyMedium" />
-        </LinearLayout>
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+                <ImageView
+                    android:id="@+id/distance_icon"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:src="@drawable/ic_ruler_horizontal"
+                    app:tint="@color/dark_gray" />
+                <TextView
+                    android:id="@+id/distance"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="Distance:"
+                    android:textAppearance="@style/TextAppearance.Material3.BodyMedium" />
+            </LinearLayout>
 
-        <!-- Duration -->
-        <LinearLayout
-            android:id="@+id/duration_container"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            app:layout_constraintTop_toBottomOf="@id/distance_container">
-
-            <ImageView
-                android:id="@+id/duration_icon"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_time"
-                android:contentDescription="Duration icon"
-                app:tint="@color/dark_gray" />
-
-            <TextView
-                android:id="@+id/duration"
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
                 android:layout_weight="1"
-                android:text="Duration:"
-                android:textAppearance="@style/TextAppearance.Material3.BodyMedium" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+                <ImageView
+                    android:id="@+id/duration_icon"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:src="@drawable/ic_time"
+                    app:tint="@color/dark_gray" />
+                <TextView
+                    android:id="@+id/duration"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="Duration:"
+                    android:textAppearance="@style/TextAppearance.Material3.BodyMedium" />
+            </LinearLayout>
         </LinearLayout>
 
         <!-- Buttons Container -->
         <LinearLayout
             android:id="@+id/buttons_container"
             android:layout_width="match_parent"
-            android:layout_height="44dp"
+            android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:orientation="horizontal"
-            android:gravity="end"
-            app:layout_constraintTop_toBottomOf="@id/duration_container"
+            android:gravity="center"
+            app:layout_constraintTop_toBottomOf="@id/stats_container"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent">
 
@@ -225,103 +233,92 @@
                 android:id="@+id/preview_ride_btn"
                 style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
                 android:layout_width="0dp"
-                android:layout_height="match_parent"
+                android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginEnd="4dp"
                 android:backgroundTint="@color/green"
                 android:text="Preview"
-                android:textSize="11sp"
+                android:textSize="12sp"
                 android:textAllCaps="false"
+                android:padding="8dp"
                 android:insetTop="0dp"
                 android:insetBottom="0dp"
-                android:paddingStart="4dp"
-                android:paddingEnd="4dp"
                 app:icon="@drawable/ic_map_location_pin"
-                app:iconSize="14dp"
-                app:iconPadding="4dp"
+                app:iconSize="16dp"
                 app:iconGravity="textStart" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/join_ride_btn"
                 style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
                 android:layout_width="0dp"
-                android:layout_height="match_parent"
+                android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginHorizontal="2dp"
                 android:backgroundTint="@color/green"
                 android:text="Join Ride"
-                android:textSize="11sp"
+                android:textSize="12sp"
                 android:textAllCaps="false"
+                android:padding="8dp"
                 android:insetTop="0dp"
                 android:insetBottom="0dp"
-                android:paddingStart="4dp"
-                android:paddingEnd="4dp"
                 app:icon="@drawable/ic_join_ride"
-                app:iconSize="14dp"
-                app:iconPadding="4dp"
+                app:iconSize="16dp"
                 app:iconGravity="textStart" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/leave_ride_btn"
                 style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
                 android:layout_width="0dp"
-                android:layout_height="match_parent"
+                android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginHorizontal="2dp"
                 android:backgroundTint="@color/quit"
                 android:text="Leave"
-                android:textSize="11sp"
+                android:textSize="12sp"
                 android:textAllCaps="false"
+                android:padding="8dp"
+                android:visibility="gone"
                 android:insetTop="0dp"
                 android:insetBottom="0dp"
-                android:paddingStart="4dp"
-                android:paddingEnd="4dp"
-                android:visibility="gone"
                 app:icon="@drawable/ic_exit"
-                app:iconSize="14dp"
-                app:iconPadding="4dp"
+                app:iconSize="16dp"
                 app:iconGravity="textStart" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/cancel_ride_btn"
                 style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
                 android:layout_width="0dp"
-                android:layout_height="match_parent"
+                android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:layout_marginHorizontal="2dp"
                 android:backgroundTint="@color/quit"
                 android:text="Cancel"
-                android:textSize="11sp"
+                android:textSize="12sp"
                 android:textAllCaps="false"
+                android:padding="8dp"
+                android:visibility="gone"
                 android:insetTop="0dp"
                 android:insetBottom="0dp"
-                android:paddingStart="4dp"
-                android:paddingEnd="4dp"
-                android:visibility="gone"
                 app:icon="@drawable/ic_close"
-                app:iconSize="14dp"
-                app:iconPadding="4dp"
+                app:iconSize="16dp"
                 app:iconGravity="textStart" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/start_route_btn"
                 style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
                 android:layout_width="0dp"
-                android:layout_height="match_parent"
+                android:layout_height="wrap_content"
                 android:layout_weight="1.2"
                 android:layout_marginStart="4dp"
                 android:backgroundTint="@color/green"
-                android:text="Start Route"
-                android:textSize="11sp"
+                android:text="Start"
+                android:textSize="12sp"
                 android:textAllCaps="false"
+                android:padding="8dp"
+                android:visibility="gone"
                 android:insetTop="0dp"
                 android:insetBottom="0dp"
-                android:paddingStart="4dp"
-                android:paddingEnd="4dp"
-                android:visibility="gone"
                 app:icon="@drawable/ic_route"
-                app:iconSize="14dp"
-                app:iconPadding="4dp"
+                app:iconSize="16dp"
                 app:iconGravity="textStart" />
 
         </LinearLayout>

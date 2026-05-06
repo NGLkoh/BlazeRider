@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Bundle
+import android.util.Log
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
@@ -56,7 +57,7 @@ class SignInActivity : AppCompatActivity() {
 
         btnSignIn.setOnClickListener {
             val emailText = email.text.toString().trim()
-            val pwd = password.text.toString().trim()
+            val pwd = password.text.toString()
             val isRememberMeChecked = cbRememberMe.isChecked
 
             if (emailText.isEmpty() || pwd.isEmpty()) {
@@ -136,8 +137,10 @@ class SignInActivity : AppCompatActivity() {
                     }
 
                     if (isAdmin) {
+                        Log.d("SignInActivity", "Admin detected, navigating to AdminActivity")
                         navigateTo(AdminActivity::class.java)
                     } else if (verified) {
+                        Log.d("SignInActivity", "User verified, navigating to HomeActivity")
                         navigateTo(HomeActivity::class.java)
                     } else {
                         val intentClass = when (stepCompleted) {

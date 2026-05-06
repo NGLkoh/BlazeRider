@@ -344,6 +344,21 @@ class PostAdapter(
 
                 transaction.set(reactionRef, mapOf("reactionType" to newReaction, "timestamp" to FieldValue.serverTimestamp(), "userId" to user.uid))
                 transaction.update(postRef, "reactionCount", updatedCount)
+
+                val postAuthorId = postSnapshot.getString("userId")
+                if (postAuthorId != null && postAuthorId != user.uid && (oldReaction == null || oldReaction != newReaction)) {
+                    val notifRef = db.collection("users").document(postAuthorId).collection("notifications").document()
+                    val notification = hashMapOf(
+                        "actorId" to user.uid,
+                        "entityId" to postId,
+                        "entityType" to "post",
+                        "type" to "reaction",
+                        "reactionType" to newReaction,
+                        "createdAt" to FieldValue.serverTimestamp(),
+                        "isRead" to false
+                    )
+                    transaction.set(notifRef, notification)
+                }
                 null
             }.addOnFailureListener {
                 if (boundPost?.id == postId) updateLikeIcon(oldReaction)
@@ -392,6 +407,17 @@ class PostAdapter(
                     rideControlsContainer.visibility = View.VISIBLE
                     val btnText = if (status == "ongoing") "Continue Route" else "Start Route"
                     if (btnStartRoute.text != btnText) btnStartRoute.text = btnText
+
+                    // Check if it's a scheduled ride and if it's time to start (ride datetime)
+                    val ride = snapshot.toObject(SharedRide::class.java)
+                    val rideTime = ride?.datetime?.toDate()?.time ?: 0L
+                    val now = System.currentTimeMillis()
+
+                    if (status != "ongoing" && now < rideTime) {
+                        btnStartRoute.visibility = View.GONE
+                    } else {
+                        btnStartRoute.visibility = View.VISIBLE
+                    }
                     
                     btnStartRoute.setOnClickListener {
                         val ride = snapshot.toObject(SharedRide::class.java)?.copy(sharedRoutesId = snapshot.id)

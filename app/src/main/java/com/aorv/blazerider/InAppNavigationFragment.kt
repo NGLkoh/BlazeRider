@@ -46,6 +46,13 @@ class InAppNavigationFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         _binding = FragmentInAppNavigationBinding.inflate(inflater, container, false)
+        if (currentRide != null && currentRide?.userUid == auth.currentUser?.uid && currentRide?.status != "ongoing") {
+            currentRide?.sharedRoutesId?.let { id ->
+                firestore.collection("sharedRoutes").document(id)
+                    .update("status", "ongoing")
+            }
+        }
+
         return binding.root
     }
 
@@ -131,6 +138,15 @@ class InAppNavigationFragment : Fragment() {
         val rideRef = firestore.collection("sharedRoutes").document(rideId)
         if (isRideCreator) {
             batch.update(rideRef, "status", "completed")
+            // Also update the private rides collection if it's a scheduled ride
+            firestore.collection("rides")
+                .whereEqualTo("originalSharedRouteId", rideId)
+                .get()
+                .addOnSuccessListener { snapshot ->
+                    for (doc in snapshot.documents) {
+                        doc.reference.update("status", "completed")
+                    }
+                }
         } else {
             batch.update(rideRef, "joinedRiders.$userId", FieldValue.delete())
         }

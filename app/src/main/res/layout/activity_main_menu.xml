@@ -7,8 +7,7 @@
     android:orientation="vertical"
     android:gravity="center"
     android:padding="24dp"
-    android:background="@color/red_orange"
-    android:fontFamily="@font/poppins_medium">
+    android:background="@color/red_orange">
 
     <!-- Logo -->
     <ImageView

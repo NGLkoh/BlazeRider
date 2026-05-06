@@ -1,6 +1,7 @@
 package com.aorv.blazerider
 
 import android.app.AlertDialog
+import android.content.Intent
 import android.os.Bundle
 import android.text.Editable
 import android.text.InputType
@@ -157,6 +158,9 @@ class UsersFragment : Fragment() {
     }
 
     private fun confirmUser(user: UserRequest) {
+        val userEmail = user.email ?: ""
+        val userName = "${user.firstName} ${user.lastName}"
+
         db.collection("users").document(user.userId ?: return)
             .update(
                 mapOf(
@@ -166,8 +170,31 @@ class UsersFragment : Fragment() {
                 )
             )
             .addOnSuccessListener {
-                if (isAdded && context != null) Toast.makeText(context, "User confirmed", Toast.LENGTH_SHORT).show()
+                if (isAdded && context != null) {
+                    Toast.makeText(context, "User confirmed", Toast.LENGTH_SHORT).show()
+                    sendEmailNotification(userEmail, userName)
+                }
             }
+    }
+
+    private fun sendEmailNotification(email: String, name: String) {
+        if (email.isEmpty()) return
+
+        val subject = "Blaze Rider Registration Success"
+        val body = "Hello $name,\n\nCongratulations! Your registration with Blaze Rider has been confirmed by the admin. You can now access all the features of the app.\n\nRide safe!\nBlaze Rider Team"
+
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "message/rfc822"
+            putExtra(Intent.EXTRA_EMAIL, arrayOf(email))
+            putExtra(Intent.EXTRA_SUBJECT, subject)
+            putExtra(Intent.EXTRA_TEXT, body)
+        }
+
+        try {
+            startActivity(Intent.createChooser(intent, "Send Email"))
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to open email client: ${e.message}")
+        }
     }
 
     private fun showDeactivationDialog(user: UserRequest) {

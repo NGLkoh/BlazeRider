@@ -283,7 +283,8 @@ class CreateRideActivity : AppCompatActivity() {
             "hostId" to user.uid,
             "createdAt" to java.util.Date(),
             "distance" to rideDistance,
-            "duration" to rideDurationSeconds
+            "duration" to rideDurationSeconds,
+            "isScheduled" to isScheduled
         )
 
         val postTime = if (isScheduled) scheduledCalendar.time else java.util.Date()
@@ -327,7 +328,7 @@ class CreateRideActivity : AppCompatActivity() {
         batch.commit()
             .addOnSuccessListener {
                 if (isScheduled) {
-                    scheduleWork(postRef.id, sharedRouteRef.id, scheduledCalendar.timeInMillis)
+                    scheduleWork(postRef.id, sharedRouteRef.id, rideRef.id, scheduledCalendar.timeInMillis)
                 }
                 Toast.makeText(this, "Admin Ride Event Created!", Toast.LENGTH_SHORT).show()
                 setResult(RESULT_OK)
@@ -338,13 +339,14 @@ class CreateRideActivity : AppCompatActivity() {
             }
     }
 
-    private fun scheduleWork(postId: String, sharedRouteId: String, scheduleTimestamp: Long) {
+    private fun scheduleWork(postId: String, sharedRouteId: String, rideId: String, scheduleTimestamp: Long) {
         val delay = scheduleTimestamp - System.currentTimeMillis()
         if (delay <= 0) return
 
         val data = Data.Builder()
             .putString("postId", postId)
             .putString("sharedRouteId", sharedRouteId)
+            .putString("rideId", rideId)
             .build()
 
         val workRequest = OneTimeWorkRequestBuilder<ScheduledPostWorker>()

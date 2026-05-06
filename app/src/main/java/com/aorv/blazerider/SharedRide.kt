@@ -18,6 +18,7 @@ data class SharedRide(
     val userUid: String? = null,
     val joinedRiders: Map<String, Map<String, @RawValue Any>>? = null,
     val sharedRoutesId: String? = null,
+    val ridesCollectionId: String? = null, // ID in 'rides' collection for scheduled rides
     val status: String? = null,
     val isAdminEvent: Boolean = false,
     val isScheduled: Boolean = false, // Added to handle visibility of scheduled admin

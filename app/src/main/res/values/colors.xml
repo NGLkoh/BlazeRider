@@ -17,4 +17,5 @@
     <color name="status_bar_color">#FF000000</color> <!-- Black or your preferred color -->
     <color name="primary_text_color">#000000</color>
     <color name="blue">#2196F3</color>
+    <color name="orange">#FFA500</color>
 </resources>

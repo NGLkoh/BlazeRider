@@ -100,8 +100,8 @@ class AddAdminActivity : AppCompatActivity() {
 
         btnAddAdmin.setOnClickListener {
             val email = emailEditText.text.toString().trim()
-            val password = passwordEditText.text.toString().trim()
-            val confirm = confirmPasswordEditText.text.toString().trim()
+            val password = passwordEditText.text.toString()
+            val confirm = confirmPasswordEditText.text.toString()
 
             // Reset errors
             emailLayout.error = null

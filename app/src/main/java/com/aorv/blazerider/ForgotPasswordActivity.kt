@@ -49,29 +49,16 @@ class ForgotPasswordActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            // Check if email exists in Firestore users collection
-            db.collection("users")
-                .whereEqualTo("email", inputEmail)
-                .get()
-                .addOnSuccessListener { snapshot ->
-                    if (snapshot.isEmpty) {
-                        Toast.makeText(this, "No account found with this email.", Toast.LENGTH_SHORT).show()
-                    } else {
-                        // Email exists, send reset email
-                        auth.sendPasswordResetEmail(inputEmail)
-                            .addOnSuccessListener {
-                                Toast.makeText(this, "Password reset email sent.", Toast.LENGTH_SHORT).show()
-                                startActivity(Intent(this, SignInActivity::class.java))
-                                overridePendingTransition(R.anim.slide_out_right, R.anim.slide_in_left)
-                                finish()
-                            }
-                            .addOnFailureListener { exception ->
-                                Toast.makeText(this, "Failed to send reset email: ${exception.message}", Toast.LENGTH_SHORT).show()
-                            }
-                    }
+            // Send password reset email directly
+            auth.sendPasswordResetEmail(inputEmail)
+                .addOnSuccessListener {
+                    Toast.makeText(this, "If an account exists for this email, a reset link has been sent.", Toast.LENGTH_SHORT).show()
+                    startActivity(Intent(this, SignInActivity::class.java))
+                    overridePendingTransition(R.anim.slide_out_right, R.anim.slide_in_left)
+                    finish()
                 }
                 .addOnFailureListener { exception ->
-                    Toast.makeText(this, "Error checking email: ${exception.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Failed to send reset email: ${exception.message}", Toast.LENGTH_SHORT).show()
                 }
         }
     }

@@ -192,27 +192,79 @@ class FeedFragment : Fragment() {
         if (!::postAdapter.isInitialized) return
         
         postsListener?.remove()
+        val now = com.google.firebase.Timestamp.now()
         postsListener = db.collection("posts")
-            .whereEqualTo("admin", false)  // Only fetch non-admin posts
+            .whereEqualTo("admin", false)
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, e ->
                 if (e != null) {
                     Log.e("FeedFragment", "Error loading posts: ${e.message}")
+                    // Fallback to query without index if needed, or just handle error
+                    if (e.message?.contains("index") == true) {
+                        loadPostsWithoutFilter()
+                    }
                     return@addSnapshotListener
                 }
                 if (snapshot != null) {
                     val posts = snapshot.documents.mapNotNull { doc ->
+                        val isAdmin = doc.getBoolean("admin") ?: false
+                        
+                        val isScheduled = doc.getBoolean("isScheduled") ?: false
+                        val createdAt = doc.getTimestamp("createdAt")
+                        
+                        // Hide scheduled posts until their time arrives
+                        if (isScheduled && createdAt != null && createdAt.seconds > now.seconds) {
+                            return@mapNotNull null
+                        }
+
                         val imageUris = doc.get("imageUris") as? List<String> ?: emptyList()
-                        Log.d("FeedFragment", "Post ID: ${doc.id}, Image URIs: $imageUris")
                         Post(
                             id = doc.id,
                             userId = doc.getString("userId") ?: "",
                             content = doc.getString("content") ?: "",
-                            createdAt = doc.getTimestamp("createdAt")?.toDate(),
+                            createdAt = createdAt?.toDate(),
                             imageUris = imageUris,
                             reactionCount = doc.get("reactionCount") as? Map<String, Long> ?: emptyMap(),
                             commentsCount = doc.getLong("commentsCount") ?: 0L,
-                            admin = doc.getBoolean("admin") ?: false
+                            admin = isAdmin
+                        )
+                    }
+                    postAdapter.submitPosts(posts)
+                }
+            }
+    }
+
+    private fun loadPostsWithoutFilter() {
+        postsListener?.remove()
+        val now = com.google.firebase.Timestamp.now()
+        postsListener = db.collection("posts")
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) {
+                    Log.e("FeedFragment", "Error loading posts (unfiltered): ${e.message}")
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    val posts = snapshot.documents.mapNotNull { doc ->
+                        val isAdmin = doc.getBoolean("admin") ?: false
+                        if (isAdmin) return@mapNotNull null
+
+                        val isScheduled = doc.getBoolean("isScheduled") ?: false
+                        val createdAt = doc.getTimestamp("createdAt")
+                        if (isScheduled && createdAt != null && createdAt.seconds > now.seconds) {
+                            return@mapNotNull null
+                        }
+
+                        val imageUris = doc.get("imageUris") as? List<String> ?: emptyList()
+                        Post(
+                            id = doc.id,
+                            userId = doc.getString("userId") ?: "",
+                            content = doc.getString("content") ?: "",
+                            createdAt = createdAt?.toDate(),
+                            imageUris = imageUris,
+                            reactionCount = doc.get("reactionCount") as? Map<String, Long> ?: emptyMap(),
+                            commentsCount = doc.getLong("commentsCount") ?: 0L,
+                            admin = isAdmin
                         )
                     }
                     postAdapter.submitPosts(posts)

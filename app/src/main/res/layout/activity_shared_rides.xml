@@ -52,7 +52,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:layout_marginTop="8dp">
+                android:layout_marginTop="4dp">
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/track_ride_button"
@@ -60,6 +60,8 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="Track Ride"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
                     app:buttonStyle="@style/Widget.Material3.Button.OutlinedButton"
                     app:strokeColor="@color/green"
                     app:layout_constraintStart_toStartOf="parent" />
@@ -71,6 +73,8 @@
                     android:layout_weight="1"
                     android:layout_marginStart="8dp"
                     android:text="Cancel Ride"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
                     app:buttonStyle="@style/Widget.Material3.Button.TextButton"
                     app:layout_constraintEnd_toEndOf="parent" />
             </LinearLayout>

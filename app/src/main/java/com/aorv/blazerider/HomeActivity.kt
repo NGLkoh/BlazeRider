@@ -371,15 +371,20 @@ class HomeActivity : AppCompatActivity() {
             val lastRead = userDoc.getTimestamp("lastAnnouncementReadAt") ?: Timestamp(Date(0))
             announcementsListener?.remove()
             announcementsListener = db.collection("posts")
-                .whereEqualTo("admin", true).whereGreaterThan("createdAt", lastRead)
+                .whereEqualTo("admin", true)
                 .addSnapshotListener { snapshot, e ->
-                    if (e != null) return@addSnapshotListener
+                    if (e != null) {
+                        Log.e("HomeActivity", "Error listening for announcements: ${e.message}")
+                        return@addSnapshotListener
+                    }
                     
                     val now = Date()
                     val unreadCount = snapshot?.documents?.count { doc ->
                         val isScheduled = doc.getBoolean("isScheduled") ?: false
                         val createdAt = doc.getTimestamp("createdAt")?.toDate()
-                        !isScheduled || (createdAt != null && createdAt.before(now))
+                        val isPublished = !isScheduled || (createdAt != null && createdAt.before(now))
+                        val isNew = createdAt != null && createdAt.after(lastRead.toDate())
+                        isPublished && isNew
                     } ?: 0
 
                     if (unreadCount > 0) {

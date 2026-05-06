@@ -13,8 +13,9 @@ class ScheduledPostWorker(appContext: Context, workerParams: WorkerParameters) :
     override suspend fun doWork(): Result {
         val postId = inputData.getString("postId")
         val sharedRouteId = inputData.getString("sharedRouteId")
+        val rideId = inputData.getString("rideId")
 
-        if (postId == null && sharedRouteId == null) return Result.failure()
+        if (postId == null && sharedRouteId == null && rideId == null) return Result.failure()
 
         return try {
             val db = FirebaseFirestore.getInstance()
@@ -32,9 +33,15 @@ class ScheduledPostWorker(appContext: Context, workerParams: WorkerParameters) :
                 batch.update(sharedRef, "isScheduled", false)
             }
 
+            // 3. Update the ride document if present
+            rideId?.let {
+                val rideRef = db.collection("rides").document(it)
+                batch.update(rideRef, "isScheduled", false)
+            }
+
             batch.commit().await()
 
-            Log.d("ScheduledPostWorker", "Published: Post=$postId, Ride=$sharedRouteId")
+            Log.d("ScheduledPostWorker", "Published: Post=$postId, Ride=$sharedRouteId, RideDoc=$rideId")
             
             Result.success()
         } catch (e: Exception) {
