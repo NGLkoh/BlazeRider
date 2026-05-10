@@ -115,8 +115,8 @@
                         android:text="Week"
                         android:textSize="12sp"
                         android:padding="8dp"
-                        android:background="@android:color/black"
-                        android:textColor="@android:color/white"
+                        android:background="@android:color/transparent"
+                        android:textColor="@android:color/black"
                         android:button="@null" />
 
                     <RadioButton
@@ -152,7 +152,7 @@
                 <com.github.mikephil.charting.charts.LineChart
                     android:id="@+id/lineChart"
                     android:layout_width="match_parent"
-                    android:layout_height="400dp"
+                    android:layout_height="320dp"
                     android:background="@android:color/white" />
             </LinearLayout>
         </LinearLayout>

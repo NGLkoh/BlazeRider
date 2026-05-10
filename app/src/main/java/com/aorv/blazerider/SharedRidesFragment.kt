@@ -71,15 +71,110 @@ class SharedRidesFragment : Fragment() {
                     }
                 } ?: emptyList()
 
+                val now = System.currentTimeMillis()
+                val twentyFourHoursAgo = now - (24 * 60 * 60 * 1000L)
+
                 val visibleRides = rides.filter { ride ->
-                    val isStatusActive = ride.status != "completed" && ride.status != "cancelled"
-                    // Only show rides that are not currently waiting for a scheduled publication
-                    isStatusActive && !ride.isScheduled
+                    val isStatusActive = ride.status != "completed" && ride.status != "cancelled" && ride.status != "expired"
+                    val rideTime = ride.datetime?.toDate()?.time ?: 0L
+                    
+                    // Filter Logic:
+                    // 1. Must be active (not completed/cancelled/expired)
+                    // 2. Not waiting for future scheduled publication
+                    // 3. Admin events and regular rides expire after 24 hours to keep feed clean
+                    
+                    val isScheduledWait = ride.isScheduled && rideTime > now
+                    // If ride is more than 24 hours old, it's expired
+                    val isExpired = rideTime < twentyFourHoursAgo
+                    
+                    isStatusActive && !isScheduledWait && !isExpired && ride.isPublic == true
                 }
+                
+                // Perform background expiration for those that were filtered out due to time
+                checkAndExpireRides(rides)
                 
                 noSharedRidesText.visibility = if (visibleRides.isEmpty()) View.VISIBLE else View.GONE
                 adapter.submitList(visibleRides)
             }
+    }
+
+    private fun checkAndExpireRides(rides: List<SharedRide>) {
+        val now = System.currentTimeMillis()
+        val twentyFourHoursAgo = now - (24 * 60 * 60 * 1000L)
+
+        val expiredRides = rides.filter { ride ->
+            val isStatusActive = ride.status != "completed" && ride.status != "cancelled" && ride.status != "expired"
+            val rideTime = ride.datetime?.toDate()?.time ?: 0L
+            isStatusActive && rideTime < twentyFourHoursAgo
+        }
+
+        if (expiredRides.isEmpty()) return
+
+        val batch = firestore.batch()
+        expiredRides.forEach { ride ->
+            val rideId = ride.sharedRoutesId ?: return@forEach
+            
+            // 1. Mark ride as expired
+            batch.update(firestore.collection("sharedRoutes").document(rideId), "status", "expired")
+
+            // 2. Log for creator
+            ride.userUid?.let { creatorId ->
+                val historyRef = firestore.collection("users").document(creatorId).collection("rideHistory").document()
+                batch.set(historyRef, RideHistory(
+                    datetime = Timestamp.now(),
+                    destination = ride.destination,
+                    distance = ride.distance,
+                    duration = ride.duration,
+                    origin = ride.origin,
+                    status = "Expired",
+                    userUid = creatorId,
+                    sharedRoutesId = rideId
+                ))
+                // Clear creator status if they were still on this ride
+                batch.update(firestore.collection("users").document(creatorId), "currentJoinedRide", null)
+
+                // Notify creator
+                val notifRef = firestore.collection("users").document(creatorId).collection("notifications").document()
+                batch.set(notifRef, mapOf(
+                    "actorId" to "system",
+                    "createdAt" to Timestamp.now(),
+                    "message" to "Your ride to ${ride.destination} has expired.",
+                    "type" to "ride_expired",
+                    "isRead" to false
+                ))
+            }
+
+            // 3. Log for joined riders
+            ride.joinedRiders?.keys?.forEach { riderId ->
+                val historyRef = firestore.collection("users").document(riderId).collection("rideHistory").document()
+                batch.set(historyRef, RideHistory(
+                    datetime = Timestamp.now(),
+                    destination = ride.destination,
+                    distance = ride.distance,
+                    duration = ride.duration,
+                    origin = ride.origin,
+                    status = "Expired",
+                    userUid = riderId,
+                    sharedRoutesId = rideId
+                ))
+                // Clear rider status
+                batch.update(firestore.collection("users").document(riderId), "currentJoinedRide", null)
+                
+                // Notify rider
+                val notifRef = firestore.collection("users").document(riderId).collection("notifications").document()
+                batch.set(notifRef, mapOf(
+                    "actorId" to "system",
+                    "createdAt" to Timestamp.now(),
+                    "message" to "The ride to ${ride.destination} has expired.",
+                    "type" to "ride_expired",
+                    "isRead" to false
+                ))
+            }
+        }
+
+        batch.commit().addOnFailureListener { e ->
+            Log.e(TAG, "Error expiring rides: ${e.message}")
+        }
     }
 
     private fun getAddressFromCoords(lat: Double?, lng: Double?): String? {
@@ -359,11 +454,22 @@ class SharedRidesFragment : Fragment() {
                     .setMessage("Are you sure you want to leave this ride?")
                     .setPositiveButton("Yes") { _, _ ->
                         val userId = auth.currentUser?.uid ?: return@setPositiveButton
-                        ride.sharedRoutesId?.let { id ->
-                            val updates = hashMapOf<String, Any>(
-                                "joinedRiders.$userId" to com.google.firebase.firestore.FieldValue.delete()
-                            )
-                            firestore.collection("sharedRoutes").document(id).update(updates)
+                        val rideId = ride.sharedRoutesId ?: return@setPositiveButton
+
+                        val batch = firestore.batch()
+                        val rideRef = firestore.collection("sharedRoutes").document(rideId)
+                        val userRef = firestore.collection("users").document(userId)
+
+                        batch.update(rideRef, "joinedRiders.$userId", com.google.firebase.firestore.FieldValue.delete())
+                        batch.update(userRef, "currentJoinedRide", null)
+
+                        batch.commit().addOnSuccessListener {
+                            if (isAdded) {
+                                (activity as? SharedRidesActivity)?.hideRideBanner()
+                                Toast.makeText(requireContext(), "You left the ride", Toast.LENGTH_SHORT).show()
+                            }
+                        }.addOnFailureListener { e ->
+                            Log.e(TAG, "Error leaving ride: ${e.message}")
                         }
                     }
                     .setNegativeButton("No", null)

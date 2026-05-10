@@ -254,20 +254,33 @@ class DashboardFragment : Fragment() {
             position = com.github.mikephil.charting.components.XAxis.XAxisPosition.BOTTOM
             setDrawGridLines(false)
         }
+        val maxY = entries.maxOfOrNull { it.y } ?: 0f
         lineChart.axisLeft.apply {
             axisMinimum = 0f
-            // If all values are 0, set an explicit maximum so the chart doesn't look weird
-            if (entries.all { it.y == 0f }) {
-                axisMaximum = 5f 
-            } else {
-                resetAxisMaximum()
-            }
+            // Adjust the Y-axis maximum to prevent small data from looking like massive spikes.
+            // We use a minimum range of 10 if the data is small.
+            axisMaximum = if (maxY < 10f) 10f else (maxY * 1.2f)
+            
             granularity = 1f
-            setDrawGridLines(false)
+            setLabelCount(6, false)
+            setDrawGridLines(true)
+            gridColor = android.graphics.Color.LTGRAY
+            gridLineWidth = 0.5f
         }
         lineChart.axisRight.isEnabled = false
         lineChart.description.isEnabled = false
+        
+        // Ensure the chart fits the screen and scales appropriately
+        lineChart.setAutoScaleMinMaxEnabled(true)
+        lineChart.setPinchZoom(true)
+        lineChart.setScaleEnabled(true)
+        lineChart.fitScreen()
+        
+        lineChart.notifyDataSetChanged()
         lineChart.invalidate()
+        
+        // Animate for a better visual transition
+        lineChart.animateY(1000)
     }
 
     private fun getSdfPattern(type: String): String {

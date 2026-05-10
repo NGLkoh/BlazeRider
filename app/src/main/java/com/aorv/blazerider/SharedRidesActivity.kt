@@ -24,6 +24,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.firebase.firestore.SetOptions
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.Date
 
 class SharedRidesActivity : AppCompatActivity() {
     private lateinit var auth: FirebaseAuth
@@ -33,6 +36,9 @@ class SharedRidesActivity : AppCompatActivity() {
     private lateinit var trackRideButton: MaterialButton
     private lateinit var cancelRideButton: MaterialButton
     private var userListener: ListenerRegistration? = null
+    private var rideListener: ListenerRegistration? = null
+    private var currentListeningRideId: String? = null
+    private var bannerJob: kotlinx.coroutines.Job? = null
     private val TAG = "SharedRidesActivity"
     private lateinit var viewPager: ViewPager2
 
@@ -94,7 +100,7 @@ class SharedRidesActivity : AppCompatActivity() {
                     .addOnSuccessListener { userDoc ->
                         val currentJoinedRide = userDoc.getString("currentJoinedRide")
                         if (currentJoinedRide != null) {
-                            fetchRideDetailsAndStartPreview(currentJoinedRide)
+                            fetchRideDetailsAndStartNavigation(currentJoinedRide)
                         } else {
                             Log.w(TAG, "No active ride to track")
                             rideBanner.isVisible = false
@@ -150,7 +156,7 @@ class SharedRidesActivity : AppCompatActivity() {
                     }
                     if (snapshot != null && snapshot.exists()) {
                         Log.d(TAG, "User document changed, refreshing banner")
-                        checkAndDisplayRideBanner()
+                        checkAndDisplayRideBanner(snapshot)
                     }
                 }
         }
@@ -159,6 +165,7 @@ class SharedRidesActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         userListener?.remove()
+        rideListener?.remove()
     }
 
     private fun cancelRide(userId: String, rideId: String) {
@@ -184,7 +191,7 @@ class SharedRidesActivity : AppCompatActivity() {
             }
         }.addOnSuccessListener {
             Log.d(TAG, "Ride $rideId handled for user $userId")
-            rideBanner.isVisible = false
+            hideRideBanner()
             android.widget.Toast.makeText(this, "Ride updated", android.widget.Toast.LENGTH_SHORT).show()
         }.addOnFailureListener { e ->
             Log.e(TAG, "Failed to update ride: ${e.message}")
@@ -192,56 +199,117 @@ class SharedRidesActivity : AppCompatActivity() {
         }
     }
 
-    private fun checkAndDisplayRideBanner() {
+    fun refreshRideBanner() {
+        checkAndDisplayRideBanner()
+    }
+
+    fun hideRideBanner() {
+        bannerJob?.cancel()
+        rideBanner.isVisible = false
+    }
+
+    private fun checkAndDisplayRideBanner(userSnapshot: com.google.firebase.firestore.DocumentSnapshot? = null) {
+        bannerJob?.cancel()
         auth.currentUser?.uid?.let { userId ->
-            CoroutineScope(Dispatchers.Main).launch {
+            bannerJob = CoroutineScope(Dispatchers.Main).launch {
                 try {
-                    val userDoc = db.collection("users").document(userId).get().await()
+                    val userDoc = userSnapshot ?: db.collection("users").document(userId).get().await()
                     val currentJoinedRide = userDoc.getString("currentJoinedRide")
                     val userFirstName = userDoc.getString("firstName") ?: "User"
 
-                    if (!currentJoinedRide.isNullOrEmpty()) {
-                        val rideDoc = db.collection("sharedRoutes").document(currentJoinedRide).get().await()
-                        if (rideDoc.exists() && rideDoc.getString("status") != "completed" && rideDoc.getString("status") != "cancelled") {
+                    if (currentJoinedRide.isNullOrEmpty()) {
+                        rideListener?.remove()
+                        currentListeningRideId = null
+                        rideBanner.isVisible = false
+                        return@launch
+                    }
+
+                    if (currentJoinedRide == currentListeningRideId && rideListener != null) {
+                        return@launch
+                    }
+
+                    rideListener?.remove()
+                    currentListeningRideId = currentJoinedRide
+
+                    rideListener = db.collection("sharedRoutes").document(currentJoinedRide)
+                        .addSnapshotListener { rideDoc, error ->
+                            if (error != null) {
+                                Log.e(TAG, "Error listening to ride: ${error.message}")
+                                return@addSnapshotListener
+                            }
+
+                            if (rideDoc == null || !rideDoc.exists()) {
+                                db.collection("users").document(userId).update("currentJoinedRide", null)
+                                rideBanner.isVisible = false
+                                return@addSnapshotListener
+                            }
+
+                            val status = rideDoc.getString("status")
+                            val rideTime = rideDoc.getTimestamp("datetime")?.toDate()?.time ?: 0L
+                            val now = System.currentTimeMillis()
+                            val twentyFourHoursAgo = now - (24 * 60 * 60 * 1000L)
+                            val isExpired = rideTime < twentyFourHoursAgo && status != "completed" && status != "cancelled"
+
+                            if (status == "completed" || status == "cancelled" || status == "expired" || isExpired) {
+                                db.collection("users").document(userId).update("currentJoinedRide", null)
+                                rideBanner.isVisible = false
+                                return@addSnapshotListener
+                            }
+
                             val isPublic = rideDoc.getBoolean("isPublic") ?: true
                             if (!isPublic) {
                                 rideBanner.isVisible = false
-                                return@launch
+                                return@addSnapshotListener
                             }
                             
                             val hostUid = rideDoc.getString("userUid") ?: ""
                             val isHost = hostUid == userId
+                            val isOngoing = status == "ongoing"
                             
-                            val origin = rideDoc.getString("origin") ?: "Current Location"
                             val destination = rideDoc.getString("destination") ?: "Unknown Destination"
+                            val sdf = SimpleDateFormat("MMM dd, yyyy 'at' hh:mm a", Locale.getDefault())
+                            val formattedTime = sdf.format(Date(rideTime))
 
-                            val message = if (isHost) {
-                                val joinedRiders = rideDoc.get("joinedRiders") as? Map<String, Any>
-                                val ridersCount = joinedRiders?.size ?: 0
-                                if (ridersCount > 0) {
-                                    "$userFirstName, your ride to $destination is in progress with $ridersCount rider(s) joined."
+                            CoroutineScope(Dispatchers.Main).launch {
+                                val message = if (isHost) {
+                                    val joinedRiders = rideDoc.get("joinedRiders") as? Map<String, Any>
+                                    val ridersCount = joinedRiders?.size ?: 0
+                                    if (isOngoing) {
+                                        if (ridersCount > 0) "$userFirstName, your ride to $destination is in progress with $ridersCount rider(s) joined."
+                                        else "$userFirstName, your ride to $destination is active and awaiting riders."
+                                    } else {
+                                        "$userFirstName, your ride to $destination is scheduled for $formattedTime."
+                                    }
                                 } else {
-                                    "$userFirstName, your ride to $destination is active and awaiting riders."
+                                    val hostDoc = db.collection("users").document(hostUid).get().await()
+                                    val hostName = "${hostDoc.getString("firstName") ?: "Rider"} ${hostDoc.getString("lastName") ?: ""}".trim()
+                                    if (isOngoing) {
+                                        "$userFirstName, your ride with $hostName to $destination is in progress."
+                                    } else {
+                                        "$userFirstName, your ride with $hostName to $destination is scheduled for $formattedTime."
+                                    }
                                 }
-                            } else {
-                                val riderDoc = db.collection("users").document(hostUid).get().await()
-                                val hostName = "${riderDoc.getString("firstName") ?: "Rider"} ${riderDoc.getString("lastName") ?: ""}".trim()
-                                "$userFirstName, your ride with $hostName to $destination is in progress."
+                                rideMessage.text = message
                             }
                             
-                            rideMessage.text = message
                             rideBanner.isVisible = true
-                            cancelRideButton.text = if (isHost) "Cancel Ride" else "Quit Ride"
-                        } else {
-                            // Ride is finished, cancelled, or missing
-                            if (rideDoc.exists() || currentJoinedRide != null) {
-                                db.collection("users").document(userId).update("currentJoinedRide", null)
+                            
+                            // Only allow tracking/starting if it's ongoing or host starting at the right time
+                            trackRideButton.isVisible = true
+                            if (isOngoing) {
+                                trackRideButton.isEnabled = true
+                                trackRideButton.text = if (isHost) "Continue Route" else "Track Ride"
+                            } else if (isHost && now >= rideTime) {
+                                trackRideButton.isEnabled = true
+                                trackRideButton.text = "Start Route"
+                            } else {
+                                // Scheduled case - disable button for everyone until host starts it
+                                trackRideButton.isEnabled = false
+                                trackRideButton.text = if (isHost) "Start Route" else "Track Ride"
                             }
-                            rideBanner.isVisible = false
+
+                            cancelRideButton.text = if (isHost) "Cancel Ride" else "Quit Ride"
                         }
-                    } else {
-                        rideBanner.isVisible = false
-                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error displaying ride banner: ${e.message}")
                     rideBanner.isVisible = false
@@ -250,38 +318,25 @@ class SharedRidesActivity : AppCompatActivity() {
         }
     }
 
-    private fun fetchRideDetailsAndStartPreview(rideId: String) {
+    private fun fetchRideDetailsAndStartNavigation(rideId: String) {
         CoroutineScope(Dispatchers.Main).launch {
             try {
                 val rideDoc = db.collection("sharedRoutes").document(rideId).get().await()
                 if (rideDoc.exists()) {
-                    val datetime = rideDoc.getTimestamp("datetime")?.toDate()?.time ?: 0L
-                    val destination = rideDoc.getString("destination") ?: ""
-                    val destinationCoordinates = rideDoc.get("destinationCoordinates") as? Map<String, Any>
-                    val destinationLat = (destinationCoordinates?.get("latitude") as? Number)?.toDouble() ?: 0.0
-                    val destinationLng = (destinationCoordinates?.get("longitude") as? Number)?.toDouble() ?: 0.0
-                    val distance = rideDoc.getDouble("distance") ?: 0.0
-                    val duration = rideDoc.getDouble("duration") ?: 0.0
-                    val origin = rideDoc.getString("origin") ?: ""
-                    val originCoordinates = rideDoc.get("originCoordinates") as? Map<String, Any>
-                    val originLat = (originCoordinates?.get("latitude") as? Number)?.toDouble() ?: 0.0
-                    val originLng = (originCoordinates?.get("longitude") as? Number)?.toDouble() ?: 0.0
-                    val userUid = rideDoc.getString("userUid") ?: ""
-
-                    val intent = Intent(this@SharedRidesActivity, PreviewRideActivity::class.java).apply {
-                        putExtra("ride_datetime", datetime)
-                        putExtra("ride_destination", destination)
-                        putExtra("ride_destination_lat", destinationLat)
-                        putExtra("ride_destination_lng", destinationLng)
-                        putExtra("ride_distance", distance)
-                        putExtra("ride_duration", duration)
-                        putExtra("ride_origin", origin)
-                        putExtra("ride_origin_lat", originLat)
-                        putExtra("ride_origin_lng", originLng)
-                        putExtra("ride_user_uid", userUid)
-                        putExtra("ride_id", rideId)
+                    val status = rideDoc.getString("status")
+                    val hostUid = rideDoc.getString("userUid")
+                    
+                    if (hostUid == auth.currentUser?.uid && status != "ongoing") {
+                        db.collection("sharedRoutes").document(rideId).update("status", "ongoing")
                     }
-                    startActivity(intent)
+
+                    val ride = rideDoc.toObject(SharedRide::class.java)?.copy(sharedRoutesId = rideId)
+                    if (ride != null) {
+                        val intent = Intent(this@SharedRidesActivity, InAppNavigationActivity::class.java).apply {
+                            putExtra("EXTRA_RIDE", ride)
+                        }
+                        startActivity(intent)
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error fetching ride details: ${e.message}")

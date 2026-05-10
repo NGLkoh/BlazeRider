@@ -131,7 +131,7 @@ class MainActivity : AppCompatActivity() {
                                     .addOnSuccessListener { rideDoc ->
                                         if (rideDoc.exists()) {
                                             val status = rideDoc.getString("status")
-                                            if (status == "ongoing" || status == "active") {
+                                            if (status == "ongoing") {
                                                 // Safely extract coordinates as Map<String, Double>
                                                 val destCoordsRaw = rideDoc.get("destinationCoordinates") as? Map<*, *>
                                                 val destCoords = destCoordsRaw?.mapNotNull { (k, v) ->
@@ -167,8 +167,7 @@ class MainActivity : AppCompatActivity() {
                                                 }
                                                 startActivity(intent)
                                             } else {
-                                                Log.d(TAG, "Ride exists but status is $status, redirecting to Home")
-                                                db.collection("users").document(currentUser.uid).update("currentJoinedRide", null)
+                                                Log.d(TAG, "Ride exists but status is $status (not ongoing), redirecting to Home")
                                                 startActivity(Intent(this, HomeActivity::class.java))
                                                 startLocationUpdates(currentUser.uid)
                                             }

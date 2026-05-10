@@ -129,7 +129,8 @@ class AnnouncementsFragment : Fragment() {
                 }
 
                 if (snapshot != null) {
-                    val now = Date() // Get the current time EVERY time the data updates
+                    val now = Date()
+                    val twentyFourHoursAgo = Date(System.currentTimeMillis() - 24 * 60 * 60 * 1000L)
 
                     val posts = snapshot.documents.mapNotNull { doc ->
                         try {
@@ -151,9 +152,11 @@ class AnnouncementsFragment : Fragment() {
                         }
                     }.filter { post ->
                         // FILTER LOGIC:
-                        // 1. If it is NOT scheduled (Post Now) -> Show it.
+                        // 1. Only show posts from the last 24 hours.
                         // 2. If it IS scheduled -> Only show it if the time (createdAt) has passed.
-                        !post.isScheduled || (post.createdAt != null && post.createdAt.before(now))
+                        val isRecent = post.createdAt != null && !post.createdAt.before(twentyFourHoursAgo)
+                        val isReleased = !post.isScheduled || (post.createdAt != null && post.createdAt.before(now))
+                        isRecent && isReleased
                     }
 
                     postAdapter.submitPosts(posts)

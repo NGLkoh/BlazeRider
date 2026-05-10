@@ -88,12 +88,66 @@ class MyRidesFragment : Fragment() {
                 // Filter for active rides where user is creator or joiner
                 sharedRoutesList = allRides.filter { ride ->
                     val userIdMatch = ride.userUid == userId || ride.joinedRiders?.containsKey(userId) == true
-                    val statusMatch = ride.status != "completed" && ride.status != "cancelled"
-                    userIdMatch && statusMatch
+                    val statusMatch = ride.status != "completed" && ride.status != "cancelled" && ride.status != "expired"
+                    
+                    val now = System.currentTimeMillis()
+                    val twentyFourHoursAgo = now - (24 * 60 * 60 * 1000L)
+                    val rideTime = ride.datetime?.toDate()?.time ?: 0L
+                    val isExpired = rideTime < twentyFourHoursAgo
+
+                    userIdMatch && statusMatch && !isExpired
                 }
 
+                checkAndExpireUserRides(allRides, userId)
                 updateList()
             }
+    }
+
+    private fun checkAndExpireUserRides(rides: List<SharedRide>, userId: String) {
+        val now = System.currentTimeMillis()
+        val twentyFourHoursAgo = now - (24 * 60 * 60 * 1000L)
+
+        val ridesToExpire = rides.filter { ride ->
+            val isInvolved = ride.userUid == userId || ride.joinedRiders?.containsKey(userId) == true
+            val isStatusActive = ride.status != "completed" && ride.status != "cancelled" && ride.status != "expired"
+            val rideTime = ride.datetime?.toDate()?.time ?: 0L
+            isInvolved && isStatusActive && rideTime < twentyFourHoursAgo
+        }
+
+        if (ridesToExpire.isEmpty()) return
+
+        val batch = firestore.batch()
+        ridesToExpire.forEach { ride ->
+            val rideId = ride.sharedRoutesId ?: return@forEach
+            val isCreator = ride.userUid == userId
+
+            // 1. Mark ride as expired if user is creator
+            if (isCreator) {
+                batch.update(firestore.collection("sharedRoutes").document(rideId), "status", "expired")
+            }
+
+            // 2. Log to history for this user
+            val historyRef = firestore.collection("users").document(userId).collection("rideHistory").document()
+            batch.set(historyRef, RideHistory(
+                datetime = Timestamp.now(),
+                destination = ride.destination,
+                distance = ride.distance,
+                duration = ride.duration,
+                origin = ride.origin,
+                status = "Expired",
+                userUid = userId,
+                sharedRoutesId = rideId
+            ))
+
+            // 3. Clear user's active ride status
+            batch.update(firestore.collection("users").document(userId), "currentJoinedRide", null)
+        }
+
+        batch.commit().addOnSuccessListener {
+            (activity as? SharedRidesActivity)?.hideRideBanner()
+        }.addOnFailureListener { e ->
+            Log.e(TAG, "Error expiring user rides: ${e.message}")
+        }
     }
 
     private fun fetchScheduledRides() {
@@ -124,6 +178,16 @@ class MyRidesFragment : Fragment() {
                             is Long -> Timestamp(Date(rideTimestampRaw))
                             is Timestamp -> rideTimestampRaw
                             else -> Timestamp.now()
+                        }
+
+                        val now = System.currentTimeMillis()
+                        val twentyFourHoursAgo = now - (24 * 60 * 60 * 1000L)
+                        val rideTime = rideTimestamp.toDate().time
+                        
+                        if (rideTime < twentyFourHoursAgo && doc.getString("status") != "cancelled" && doc.getString("status") != "expired") {
+                            // Mark as expired in history and update status
+                            expireScheduledRide(doc.id, userId, doc.getString("endLocationName"), doc.getDouble("distance"), doc.getDouble("duration"), doc.getString("startLocationName"))
+                            return@mapNotNull null
                         }
 
                         SharedRide(
@@ -172,6 +236,37 @@ class MyRidesFragment : Fragment() {
         }
 
         adapter.submitList(combinedRides)
+    }
+
+    private fun expireScheduledRide(docId: String, userId: String, destination: String?, distance: Double?, duration: Double?, origin: String?) {
+        val batch = firestore.batch()
+        batch.update(firestore.collection("rides").document(docId), "status", "expired")
+        
+        val historyRef = firestore.collection("users").document(userId).collection("rideHistory").document()
+        batch.set(historyRef, RideHistory(
+            datetime = Timestamp.now(),
+            destination = destination,
+            distance = distance,
+            duration = duration,
+            origin = origin,
+            status = "Expired (Scheduled)",
+            userUid = userId,
+            sharedRoutesId = docId
+        ))
+
+        // Notify user about expired scheduled ride
+        val notifRef = firestore.collection("users").document(userId).collection("notifications").document()
+        batch.set(notifRef, mapOf(
+            "actorId" to "system",
+            "createdAt" to Timestamp.now(),
+            "message" to "Your scheduled ride to $destination has expired and was not started.",
+            "type" to "ride_expired",
+            "isRead" to false
+        ))
+        
+        batch.commit().addOnFailureListener { e ->
+            Log.e(TAG, "Error expiring scheduled ride $docId: ${e.message}")
+        }
     }
 
     inner class MyRidesAdapter : RecyclerView.Adapter<MyRidesAdapter.ViewHolder>() {
@@ -492,6 +587,7 @@ class MyRidesFragment : Fragment() {
                                     ))
                                 }
                         }
+                        (activity as? SharedRidesActivity)?.hideRideBanner()
                     }
 
                 }.addOnFailureListener { e ->
@@ -508,7 +604,10 @@ class MyRidesFragment : Fragment() {
                 batch.update(firestore.collection("sharedRoutes").document(rideId), "joinedRiders.$userId", com.google.firebase.firestore.FieldValue.delete())
 
                 batch.commit().addOnSuccessListener {
-                    if (isAdded) Toast.makeText(requireContext(), "You left the ride", Toast.LENGTH_SHORT).show()
+                    if (isAdded) {
+                        (activity as? SharedRidesActivity)?.hideRideBanner()
+                        Toast.makeText(requireContext(), "You left the ride", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
 
@@ -566,7 +665,10 @@ class MyRidesFragment : Fragment() {
                     batch.set(historyRef, cancelledRideHistory)
 
                     batch.commit().addOnSuccessListener {
-                        if (isAdded) Toast.makeText(requireContext(), "Scheduled ride cancelled", Toast.LENGTH_SHORT).show()
+                        if (isAdded) {
+                            (activity as? SharedRidesActivity)?.hideRideBanner()
+                            Toast.makeText(requireContext(), "Scheduled ride cancelled", Toast.LENGTH_SHORT).show()
+                        }
                     }.addOnFailureListener { e ->
                         Log.e(TAG, "Error cancelling scheduled ride: ${e.message}")
                     }
@@ -603,7 +705,10 @@ class MyRidesFragment : Fragment() {
                         ))
                     }
                 }.addOnSuccessListener {
-                    if (isAdded) Toast.makeText(requireContext(), "Ride cancelled", Toast.LENGTH_SHORT).show()
+                    if (isAdded) {
+                        (activity as? SharedRidesActivity)?.hideRideBanner()
+                        Toast.makeText(requireContext(), "Ride cancelled", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
 

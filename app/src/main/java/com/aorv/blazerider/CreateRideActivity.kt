@@ -307,7 +307,8 @@ class CreateRideActivity : AppCompatActivity() {
             "userUid" to user.uid,
             "status" to "active",
             "isAdminEvent" to true,
-            "isScheduled" to isScheduled
+            "isScheduled" to isScheduled,
+            "isPublic" to true
         )
 
         val postData = hashMapOf(
@@ -330,6 +331,10 @@ class CreateRideActivity : AppCompatActivity() {
                 if (isScheduled) {
                     scheduleWork(postRef.id, sharedRouteRef.id, rideRef.id, scheduledCalendar.timeInMillis)
                 }
+                
+                // Always schedule a reminder for the ride itself
+                scheduleRideReminder(sharedRouteRef.id, name, rideCalendar.timeInMillis)
+                
                 Toast.makeText(this, "Admin Ride Event Created!", Toast.LENGTH_SHORT).show()
                 setResult(RESULT_OK)
                 finish()
@@ -351,6 +356,23 @@ class CreateRideActivity : AppCompatActivity() {
 
         val workRequest = OneTimeWorkRequestBuilder<ScheduledPostWorker>()
             .setInitialDelay(delay, TimeUnit.MILLISECONDS)
+            .setInputData(data)
+            .build()
+
+        WorkManager.getInstance(this).enqueue(workRequest)
+    }
+
+    private fun scheduleRideReminder(rideId: String, rideTitle: String, rideTimestamp: Long) {
+        val reminderTime = rideTimestamp - TimeUnit.MINUTES.toMillis(20)
+        val delay = reminderTime - System.currentTimeMillis()
+
+        val data = Data.Builder()
+            .putString("rideId", rideId)
+            .putString("rideTitle", rideTitle)
+            .build()
+
+        val workRequest = OneTimeWorkRequestBuilder<RideReminderWorker>()
+            .setInitialDelay(maxOf(0, delay), TimeUnit.MILLISECONDS)
             .setInputData(data)
             .build()
 

@@ -27,6 +27,7 @@ import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import android.graphics.Color
 import com.google.firebase.firestore.ListenerRegistration
 import java.text.SimpleDateFormat
 import java.util.*
@@ -80,6 +81,9 @@ class PostAdapter(
         private val rideControlsContainer = itemView.findViewById<LinearLayout>(R.id.ride_controls_container)
         private val btnStartRoute = itemView.findViewById<MaterialButton>(R.id.btnPostStartRoute)
         private val btnCancel = itemView.findViewById<MaterialButton>(R.id.btnPostCancel)
+        private val scheduledBadgeContainer = itemView.findViewById<LinearLayout>(R.id.scheduled_badge_container)
+        private val scheduledTimeText = itemView.findViewById<TextView>(R.id.scheduled_time_text)
+        private val scheduledIcon = itemView.findViewById<ImageView>(R.id.scheduled_icon)
 
         private val db = FirebaseFirestore.getInstance()
         private val auth = FirebaseAuth.getInstance()
@@ -91,6 +95,8 @@ class PostAdapter(
         fun bind(post: Post) {
             val isSamePost = boundPost?.id == post.id
             boundPost = post
+
+            scheduledBadgeContainer.visibility = View.GONE
 
             if (!isSamePost) {
                 currentReaction = null
@@ -125,14 +131,20 @@ class PostAdapter(
 
             val isRideEvent = post.type == "ride_event" || post.content.contains("NEW RIDE ALERT")
             
-            if (post.admin && isMyPost && isRideEvent && post.sharedRouteId.isNotEmpty()) {
-                rideControlsContainer.visibility = View.VISIBLE
-                btnViewJoinedRiders.visibility = View.VISIBLE
-                btnViewJoinedRiders.setOnClickListener { showJoinedRidersDialog(post.sharedRouteId) }
-                setupRideControls(post)
+            if (isRideEvent && post.sharedRouteId.isNotEmpty()) {
+                val isAuthor = post.userId == auth.currentUser?.uid
+                val showControls = post.admin && isAuthor
+                if (showControls) {
+                    btnViewJoinedRiders.visibility = View.VISIBLE
+                    btnViewJoinedRiders.setOnClickListener { showJoinedRidersDialog(post.sharedRouteId) }
+                } else {
+                    btnViewJoinedRiders.visibility = View.GONE
+                }
+                setupRideControls(post, showControls)
             } else {
                 rideControlsContainer.visibility = View.GONE
                 btnViewJoinedRiders.visibility = View.GONE
+                scheduledBadgeContainer.visibility = View.GONE
                 rideControlsListener?.remove()
             }
 
@@ -391,48 +403,75 @@ class PostAdapter(
             }
         }
 
-        private fun setupRideControls(post: Post) {
+        private fun setupRideControls(post: Post, showControls: Boolean) {
             rideControlsListener?.remove()
             rideControlsListener = db.collection("sharedRoutes").document(post.sharedRouteId)
                 .addSnapshotListener { snapshot, _ ->
                     if (snapshot == null || !snapshot.exists()) {
                         rideControlsContainer.visibility = View.GONE
+                        scheduledBadgeContainer.visibility = View.GONE
                         return@addSnapshotListener
                     }
                     val status = snapshot.getString("status") ?: "active"
-                    if (status == "completed" || status == "cancelled") {
+                    if (status == "completed" || status == "cancelled" || status == "expired") {
                         rideControlsContainer.visibility = View.GONE
+                        scheduledBadgeContainer.visibility = View.GONE
                         return@addSnapshotListener
                     }
-                    rideControlsContainer.visibility = View.VISIBLE
-                    val btnText = if (status == "ongoing") "Continue Route" else "Start Route"
-                    if (btnStartRoute.text != btnText) btnStartRoute.text = btnText
 
-                    // Check if it's a scheduled ride and if it's time to start (ride datetime)
-                    val ride = snapshot.toObject(SharedRide::class.java)
-                    val rideTime = ride?.datetime?.toDate()?.time ?: 0L
-                    val now = System.currentTimeMillis()
+                    if (showControls) {
+                        rideControlsContainer.visibility = View.VISIBLE
+                        val btnText = if (status == "ongoing") "Continue Route" else "Start Route"
+                        if (btnStartRoute.text != btnText) btnStartRoute.text = btnText
 
-                    if (status != "ongoing" && now < rideTime) {
-                        btnStartRoute.visibility = View.GONE
+                        // Check if it's a scheduled ride and if it's time to start (ride datetime)
+                        val ride = snapshot.toObject(SharedRide::class.java)
+                        val rideTime = ride?.datetime?.toDate()?.time ?: 0L
+                        val now = System.currentTimeMillis()
+
+                        if (status != "ongoing" && now < rideTime) {
+                            btnStartRoute.visibility = View.GONE
+                        } else {
+                            btnStartRoute.visibility = View.VISIBLE
+                        }
+
+                        btnStartRoute.setOnClickListener {
+                            val currentRide = snapshot.toObject(SharedRide::class.java)?.copy(sharedRoutesId = snapshot.id)
+                            if (status != "ongoing") {
+                                db.collection("sharedRoutes").document(post.sharedRouteId).update("status", "ongoing")
+                            }
+                            val intent = Intent(itemView.context, InAppNavigationActivity::class.java).apply {
+                                putExtra("EXTRA_RIDE", currentRide)
+                            }
+                            itemView.context.startActivity(intent)
+                        }
+                        btnCancel.setOnClickListener {
+                            showConfirmation("Cancel Ride", "Are you sure you want to cancel this ride event?") {
+                                cancelRideEvent(post.sharedRouteId)
+                            }
+                        }
                     } else {
-                        btnStartRoute.visibility = View.VISIBLE
+                        rideControlsContainer.visibility = View.GONE
                     }
-                    
-                    btnStartRoute.setOnClickListener {
-                        val ride = snapshot.toObject(SharedRide::class.java)?.copy(sharedRoutesId = snapshot.id)
-                        if (status != "ongoing") {
-                            db.collection("sharedRoutes").document(post.sharedRouteId).update("status", "ongoing")
-                        }
-                        val intent = Intent(itemView.context, InAppNavigationActivity::class.java).apply {
-                            putExtra("EXTRA_RIDE", ride)
-                        }
-                        itemView.context.startActivity(intent)
-                    }
-                    btnCancel.setOnClickListener {
-                        showConfirmation("Cancel Ride", "Are you sure you want to cancel this ride event?") {
-                            cancelRideEvent(post.sharedRouteId)
-                        }
+
+                    // Update Status Indicator
+                    val ride = snapshot.toObject(SharedRide::class.java)
+                    val rideTimeDate = ride?.datetime?.toDate()
+                    if (status == "ongoing") {
+                        scheduledBadgeContainer.visibility = View.VISIBLE
+                        scheduledTimeText.text = "LIVE"
+                        scheduledTimeText.setTextColor(Color.GREEN)
+                        scheduledIcon.setImageResource(R.drawable.circle_green)
+                        scheduledIcon.setColorFilter(Color.GREEN)
+                    } else if (rideTimeDate != null) {
+                        scheduledBadgeContainer.visibility = View.VISIBLE
+                        val sdf = SimpleDateFormat("MMM dd, yyyy • hh:mm a", Locale.getDefault())
+                        scheduledTimeText.text = "Scheduled: ${sdf.format(rideTimeDate)}"
+                        scheduledTimeText.setTextColor(Color.parseColor("#E65100"))
+                        scheduledIcon.setImageResource(android.R.drawable.ic_menu_my_calendar)
+                        scheduledIcon.setColorFilter(Color.parseColor("#E65100"))
+                    } else {
+                        scheduledBadgeContainer.visibility = View.GONE
                     }
                 }
         }

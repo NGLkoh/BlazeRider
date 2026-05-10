@@ -182,13 +182,20 @@ class EventsFragment : Fragment() {
             .get()
             .addOnSuccessListener { result ->
                 val now = System.currentTimeMillis()
+                val twentyFourHoursAgo = now - (24 * 60 * 60 * 1000L)
                 val eventDates = HashSet<CalendarDay>()
+                
                 for (document in result) {
                     val isScheduled = document.getBoolean("isScheduled") ?: false
                     val createdAt = document.getTimestamp("createdAt")
                     if (createdAt != null) {
-                        // Skip if it's scheduled for the future
-                        if (isScheduled && createdAt.toDate().time > now) continue
+                        val time = createdAt.toDate().time
+                        
+                        // 1. Skip if it's scheduled for the future
+                        if (isScheduled && time > now) continue
+                        
+                        // 2. Skip if it's expired (older than 24 hours)
+                        if (time < twentyFourHoursAgo) continue
                         
                         val calendar = Calendar.getInstance()
                         calendar.time = createdAt.toDate()
@@ -234,13 +241,24 @@ class EventsFragment : Fragment() {
             .addOnSuccessListener { result ->
                 if (!isAdded) return@addOnSuccessListener
                 val now = System.currentTimeMillis()
+                val twentyFourHoursAgo = now - (24 * 60 * 60 * 1000L)
+
                 val fetchedPosts = result.documents.mapNotNull { document ->
                     try {
                         val isScheduled = document.getBoolean("isScheduled") ?: false
-                        val createdAt = document.getTimestamp("createdAt")?.toDate()?.time ?: 0L
+                        val createdAtDate = document.getTimestamp("createdAt")?.toDate()
+                        val createdAt = createdAtDate?.time ?: 0L
 
-                        // If it's scheduled and the scheduled post time hasn't arrived, hide it
+                        // 1. Hide if scheduled for the future
                         if (isScheduled && createdAt > now) {
+                            return@mapNotNull null
+                        }
+                        
+                        // 2. Hide if older than 24 hours (ONLY for non-scheduled posts OR scheduled posts that have passed)
+                        // If a post was scheduled for "today", it should be visible even if its "createdAt" (the scheduled time)
+                        // is technically > 24h old (though for same-day calendar browsing, it wouldn't be).
+                        // However, we want the 24-hour expiration to apply globally to all "published" content.
+                        if (createdAt < twentyFourHoursAgo) {
                             return@mapNotNull null
                         }
 

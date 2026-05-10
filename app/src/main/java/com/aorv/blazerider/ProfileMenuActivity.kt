@@ -34,7 +34,6 @@ class ProfileMenuActivity : AppCompatActivity() {
         val menuProfile = findViewById<LinearLayout>(R.id.menu_profile)
         val menuHistory = findViewById<LinearLayout>(R.id.menu_history)
         val menuSharedRides = findViewById<LinearLayout>(R.id.menu_shared_rides)
-        val menuHelp = findViewById<LinearLayout>(R.id.menu_help)
         val menuLogout = findViewById<LinearLayout>(R.id.menu_logout)
 
         closeButton.setOnClickListener {
@@ -80,9 +79,7 @@ class ProfileMenuActivity : AppCompatActivity() {
             startActivity(Intent(this, SharedRidesActivity::class.java))
         }
 
-        menuHelp.setOnClickListener {
-            Toast.makeText(this, "Help and Feedback coming soon", Toast.LENGTH_SHORT).show()
-        }
+
 
         menuLogout.setOnClickListener {
             auth.signOut()

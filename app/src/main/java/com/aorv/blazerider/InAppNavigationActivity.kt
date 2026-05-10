@@ -649,6 +649,8 @@ class InAppNavigationActivity : AppCompatActivity(), OnMapReadyCallback {
             "isRead" to false
         ))
 
+        batch.update(firestore.collection("users").document(userId), "currentJoinedRide", null)
+
         batch.commit().addOnSuccessListener {
             Toast.makeText(this, "Ride completed!", Toast.LENGTH_SHORT).show()
             val intent = Intent(this, HomeActivity::class.java)
